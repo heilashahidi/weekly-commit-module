@@ -25,9 +25,9 @@ class SecurityConfigTest extends AbstractPostgresIT {
 
     @Test
     void healthPathIsPublic() throws Exception {
-        // Permitted without a token; HealthController arrives in U5, so 404 (not 401).
+        // Permitted without a token; HealthController (U5) responds 200.
         mockMvc.perform(get(SecurityConfig.HEALTH_PATH))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isOk());
     }
 
     @Test

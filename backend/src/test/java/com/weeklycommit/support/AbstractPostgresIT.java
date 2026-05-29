@@ -1,6 +1,5 @@
 package com.weeklycommit.support;
 
-import com.weeklycommit.support.TestSecurityConfig;
 import io.zonky.test.db.AutoConfigureEmbeddedDatabase;
 import io.zonky.test.db.AutoConfigureEmbeddedDatabase.DatabaseProvider;
 import io.zonky.test.db.AutoConfigureEmbeddedDatabase.RefreshMode;
