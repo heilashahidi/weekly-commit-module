@@ -1,0 +1,6 @@
+plugins {
+    // Enables Gradle to auto-provision the Java 21 toolchain regardless of the host JDK.
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+rootProject.name = 'weekly-commit'

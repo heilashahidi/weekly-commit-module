@@ -1,0 +1,32 @@
+# All configuration is supplied via environment variables (${ENV_VAR:default}).
+# No literal secrets live in this file. Local-only overrides belong in
+# application-local.yml (gitignored), never here.
+spring:
+  application:
+    name: weekly-commit
+  datasource:
+    url: ${WC_DB_URL:jdbc:postgresql://localhost:5432/weeklycommit}
+    username: ${WC_DB_USERNAME:wc}
+    password: ${WC_DB_PASSWORD:wc}
+  jpa:
+    hibernate:
+      # Flyway owns the schema; Hibernate only validates against it.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+
+server:
+  port: ${WC_SERVER_PORT:8080}
+
+---
+# Local development profile: relaxed for running without external services.
+# Auth relaxation + the startup guard that prevents this profile leaking to a
+# deployed environment are wired in U4 (SecurityConfig / DevProfileGuard).
+spring:
+  config:
+    activate:
+      on-profile: dev
