@@ -1,7 +1,12 @@
+import HealthCheck from './routes/HealthCheck';
+
 export default function App() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50">
-      <h1 className="text-2xl font-semibold text-gray-800">Weekly Commit</h1>
+      <div className="space-y-3 text-center">
+        <h1 className="text-2xl font-semibold text-gray-800">Weekly Commit</h1>
+        <HealthCheck />
+      </div>
     </main>
   );
 }
