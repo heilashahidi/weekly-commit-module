@@ -1,0 +1,15 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Spring Boot local overrides (may carry real credentials)
+src/main/resources/application-local.yml
+src/main/resources/application-local.yaml
+
+# Java
+*.class
+hs_err_pid*
+
+# SpotBugs / reports
+/reports/
