@@ -22,6 +22,15 @@ spring:
 server:
   port: ${WC_SERVER_PORT:8080}
 
+# Auth0 resource-server config. Supply via env in any real environment:
+#   WC_AUTH_ISSUER_URI  -> wc.auth.issuer-uri  (e.g. https://your-tenant.auth0.com/)
+#   WC_AUTH_AUDIENCE    -> wc.auth.audience    (the API identifier)
+# Left undeclared here on purpose: when issuer-uri is absent the Auth0 JwtDecoder
+# bean is not created (e.g. local/test), so the app starts without a live tenant.
+wc:
+  cors:
+    allowed-origins: ${WC_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
 ---
 # Local development profile: relaxed for running without external services.
 # Auth relaxation + the startup guard that prevents this profile leaking to a
