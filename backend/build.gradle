@@ -1,0 +1,129 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+    id 'jacoco'
+    id 'com.diffplug.spotless' version '6.25.0'
+    id 'com.github.spotbugs' version '6.0.26'
+}
+
+group = 'com.weeklycommit'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    // Pinned toolchain: builds against Java 21 even when the host JDK differs (e.g. JDK 25).
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Real PostgreSQL for tests as a local process (no Docker required). The plan
+    // sanctions "Testcontainers or an embedded/dev Postgres"; embedded is chosen
+    // for portability across environments without a Docker daemon.
+    testImplementation 'io.zonky.test:embedded-database-spring-test:2.5.1'
+    testImplementation 'io.zonky.test:embedded-postgres:2.0.7'
+    testImplementation enforcedPlatform('io.zonky.test.postgres:embedded-postgres-binaries-bom:16.4.0')
+    testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+// ---- Format (Spotless) ----
+spotless {
+    java {
+        target 'src/**/*.java'
+        importOrder()
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+// ---- Static analysis (SpotBugs) ----
+spotbugs {
+    excludeFilter = file('config/spotbugs-exclude.xml')
+}
+tasks.named('spotbugsTest') { enabled = false }
+tasks.named('spotbugsMain') {
+    reports.create('html') { required = true }
+}
+
+// ---- Coverage (JaCoCo, line >= 80%) ----
+// Config/wiring classes carry little testable logic; exclude them so the gate
+// reflects real coverage. Lombok-generated accessors are excluded via lombok.config
+// (addLombokGeneratedAnnotation), which JaCoCo honours automatically.
+def coverageExclusions = [
+    'com/weeklycommit/WeeklyCommitApplication.class',
+    'com/weeklycommit/config/*Config.class',
+    'com/weeklycommit/config/SystemPrincipalResolver.class',
+    'com/weeklycommit/config/PrincipalResolver.class'
+]
+
+jacocoTestReport {
+    dependsOn test
+    afterEvaluate {
+        classDirectories.setFrom(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coverageExclusions)
+        })
+    }
+}
+
+jacocoTestCoverageVerification {
+    afterEvaluate {
+        classDirectories.setFrom(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coverageExclusions)
+        })
+    }
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+// ---- R4: ban Lombok @Data (source-retention, so enforced by source scan, not bytecode) ----
+tasks.register('checkNoLombokData') {
+    group = 'verification'
+    description = 'Fails if Lombok @Data is used in production sources (R4: use @Getter/@Setter/@Builder).'
+    def mainJava = fileTree('src/main/java') { include '**/*.java' }
+    inputs.files mainJava
+    doLast {
+        def offenders = mainJava.files.findAll { f ->
+            def text = f.text
+            (text =~ /(?m)^\s*@Data\b/) || text.contains('lombok.Data')
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException('Lombok @Data is banned (R4). Offending files: ' +
+                offenders.collect { it.name }.join(', '))
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn jacocoTestCoverageVerification, checkNoLombokData
+}
