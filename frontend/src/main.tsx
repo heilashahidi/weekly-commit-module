@@ -1,12 +1,4 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-import './index.css';
-
-// U7 replaces this with delegation to an async bootstrap so the standalone and
-// Module Federation remote entry points share one code path.
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+// Async boundary: dynamically importing the bootstrap lets Module Federation
+// initialize shared-dependency negotiation before the app mounts. The standalone
+// and remote entry points therefore run the same code path.
+import('./bootstrap');
