@@ -1,5 +1,6 @@
 package com.weeklycommit.config;
 
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -21,8 +22,8 @@ public class JwtPrincipalResolver implements PrincipalResolver {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null
                 || !authentication.isAuthenticated()
-                || authentication.getName() == null
-                || "anonymousUser".equals(authentication.getName())) {
+                || authentication instanceof AnonymousAuthenticationToken
+                || authentication.getName() == null) {
             return SystemPrincipalResolver.SYSTEM;
         }
         return authentication.getName();

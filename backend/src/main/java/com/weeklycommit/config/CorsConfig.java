@@ -20,11 +20,20 @@ public class CorsConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(
             @Value("${wc.cors.allowed-origins:http://localhost:5173}") String allowedOrigins) {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
             .map(String::trim)
             .filter(origin -> !origin.isEmpty())
-            .toList());
+            .toList();
+        // allowCredentials(true) with a wildcard origin is rejected by the spec
+        // at request time, but a misconfigured WC_CORS_ALLOWED_ORIGINS="*" would
+        // only surface as broken CORS in the browser. Fail fast at startup instead.
+        if (origins.contains("*")) {
+            throw new IllegalStateException(
+                "wc.cors.allowed-origins must be an explicit allowlist: a wildcard '*' is "
+                + "incompatible with credentialed requests. List each frontend origin.");
+        }
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setAllowCredentials(true);

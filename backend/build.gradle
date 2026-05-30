@@ -40,7 +40,13 @@ dependencies {
     testImplementation 'io.zonky.test:embedded-database-spring-test:2.5.1'
     testImplementation 'io.zonky.test:embedded-postgres:2.0.7'
     testImplementation enforcedPlatform('io.zonky.test.postgres:embedded-postgres-binaries-bom:16.4.0')
+    // Ship binaries for every platform a developer or CI runner might use. The
+    // BOM pins the versions; pulling only darwin-arm64v8 would make all backend
+    // integration tests fail on Linux/x86 CI or an Intel Mac (no binary to run).
     testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8'
+    testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-darwin-amd64'
+    testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-linux-amd64'
+    testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-linux-arm64v8'
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
 }
@@ -74,9 +80,13 @@ tasks.named('spotbugsMain') {
 // Config/wiring classes carry little testable logic; exclude them so the gate
 // reflects real coverage. Lombok-generated accessors are excluded via lombok.config
 // (addLombokGeneratedAnnotation), which JaCoCo honours automatically.
+// Exclude only the bootstrap class and pure declarative wiring (no branches to
+// test). SecurityConfig is deliberately NOT excluded — its fail-fast guards and
+// decoder validation are real logic that must be covered, which a blanket
+// *Config wildcard would have hidden.
 def coverageExclusions = [
     'com/weeklycommit/WeeklyCommitApplication.class',
-    'com/weeklycommit/config/*Config.class',
+    'com/weeklycommit/config/JpaAuditingConfig.class',
     'com/weeklycommit/config/SystemPrincipalResolver.class',
     'com/weeklycommit/config/PrincipalResolver.class'
 ]
@@ -115,7 +125,10 @@ tasks.register('checkNoLombokData') {
     doLast {
         def offenders = mainJava.files.findAll { f ->
             def text = f.text
-            (text =~ /(?m)^\s*@Data\b/) || text.contains('lombok.Data')
+            // Match @Data anywhere, not just at line start: inline forms like
+            // `@Entity @Data class Foo` and the fully-qualified `@lombok.Data`
+            // would slip past an anchored ^\s*@Data pattern.
+            (text =~ /@Data\b/) || text.contains('lombok.Data')
         }
         if (!offenders.isEmpty()) {
             throw new GradleException('Lombok @Data is banned (R4). Offending files: ' +
