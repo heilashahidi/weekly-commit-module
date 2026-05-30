@@ -13,7 +13,18 @@ export default defineConfig({
       exposes: {
         './WeeklyCommitApp': './src/WeeklyCommitApp.tsx',
       },
-      shared: ['react', 'react-dom'],
+      // Object form with singleton:true is mandatory for anything stateful.
+      // The array form lets host and remote each load their own copy: two
+      // React instances break hooks ("Invalid hook call"), and two react-redux
+      // copies give the remote a different Context than its Provider, so
+      // useSelector reads an empty store. requiredVersion guards against an
+      // incompatible singleton silently winning at runtime.
+      shared: {
+        react: { singleton: true, requiredVersion: '^18.3.1' },
+        'react-dom': { singleton: true, requiredVersion: '^18.3.1' },
+        'react-redux': { singleton: true, requiredVersion: '^9.1.2' },
+        '@reduxjs/toolkit': { singleton: true, requiredVersion: '^2.2.7' },
+      },
     }),
   ],
   server: { port: 5173 },
