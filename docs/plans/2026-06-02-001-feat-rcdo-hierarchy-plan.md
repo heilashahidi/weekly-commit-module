@@ -1,7 +1,7 @@
 ---
 title: "feat: RCDO strategy hierarchy (model + read API + seed)"
 type: feat
-status: active
+status: completed
 date: 2026-06-02
 depth: standard
 workstream: B
