@@ -20,15 +20,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class LifecycleController {
 
     private final LifecycleService service;
+    private final MetricsService metricsService;
 
-    public LifecycleController(LifecycleService service) {
+    public LifecycleController(LifecycleService service, MetricsService metricsService) {
         this.service = service;
+        this.metricsService = metricsService;
     }
 
     /** Get-or-create the current principal's plan for the current ISO week. */
     @GetMapping("/api/lifecycle/plans/current")
     public WeeklyPlanDto currentPlan() {
         return service.getOrCreateCurrentPlan();
+    }
+
+    /**
+     * The two-axis reconciliation metrics for a plan (U6, R11): reconciliation
+     * accuracy (planned only) and the planned-vs-unplanned ratio. Ownership-checked
+     * (404 missing, 403 mismatch) in {@link MetricsService}.
+     */
+    @GetMapping("/api/lifecycle/plans/{planId}/metrics")
+    public PlanMetricsDto metrics(@PathVariable UUID planId) {
+        return metricsService.getMetrics(planId);
     }
 
     /** Manual {@code DRAFT -> LOCKED} (USER_LOCKED). */
