@@ -70,11 +70,15 @@ class LifecycleControllerTest extends AbstractPostgresIT {
     }
 
     private void savedCommitment(UUID planId) {
+        savedCommitment(planId, "Existing", true);
+    }
+
+    private void savedCommitment(UUID planId, String title, boolean planned) {
         Commitment c = new Commitment();
         c.setWeeklyPlanId(planId);
         c.setRcdoNodeId(UUID.fromString(SEEDED_RCDO_NODE_ID));
-        c.setTitle("Existing");
-        c.setPlanned(true);
+        c.setTitle(title);
+        c.setPlanned(planned);
         commitmentRepository.saveAndFlush(c);
     }
 
@@ -99,6 +103,88 @@ class LifecycleControllerTest extends AbstractPostgresIT {
 
         assertThat(secondNode.get("id").asText()).isEqualTo(firstNode.get("id").asText());
         assertThat(planRepository.findByOwnerAndWeekKey(OWNER, "2026-W23")).isPresent();
+    }
+
+    // --- get plan by id (U1, UX-R19) ---
+
+    @Test
+    void getPlanByIdReturnsOwnedPlan() throws Exception {
+        WeeklyPlan plan = savedPlan(OWNER, PlanStatus.LOCKED);
+        savedCommitment(plan.getId());
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId())
+                .header(HttpHeaders.AUTHORIZATION, bearer()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(plan.getId().toString()))
+            .andExpect(jsonPath("$.status").value("LOCKED"))
+            .andExpect(jsonPath("$.commitmentCount").value(1));
+    }
+
+    @Test
+    void getPlanByIdOtherOwnerForbidden() throws Exception {
+        WeeklyPlan othersPlan = savedPlan(OTHER_OWNER, PlanStatus.DRAFT);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + othersPlan.getId())
+                .header(HttpHeaders.AUTHORIZATION, bearer()))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getPlanByIdUnknownNotFound() throws Exception {
+        mockMvc.perform(get("/api/lifecycle/plans/" + UUID.randomUUID())
+                .header(HttpHeaders.AUTHORIZATION, bearer()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getPlanByIdWithoutTokenRejected() throws Exception {
+        WeeklyPlan plan = savedPlan(OWNER, PlanStatus.DRAFT);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId()))
+            .andExpect(status().isUnauthorized());
+    }
+
+    // --- list plan commitments (U1, UX-R18) ---
+
+    @Test
+    void listCommitmentsReturnsPlannedAndUnplanned() throws Exception {
+        WeeklyPlan plan = savedPlan(OWNER, PlanStatus.LOCKED);
+        savedCommitment(plan.getId(), "Planned one", true);
+        savedCommitment(plan.getId(), "Unplanned one", false);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId() + "/commitments")
+                .header(HttpHeaders.AUTHORIZATION, bearer()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[?(@.planned == true)].title").value("Planned one"))
+            .andExpect(jsonPath("$[?(@.planned == false)].title").value("Unplanned one"));
+    }
+
+    @Test
+    void listCommitmentsEmptyPlanReturnsEmptyList() throws Exception {
+        WeeklyPlan plan = savedPlan(OWNER, PlanStatus.DRAFT);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId() + "/commitments")
+                .header(HttpHeaders.AUTHORIZATION, bearer()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void listCommitmentsOtherOwnerForbidden() throws Exception {
+        WeeklyPlan othersPlan = savedPlan(OTHER_OWNER, PlanStatus.DRAFT);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + othersPlan.getId() + "/commitments")
+                .header(HttpHeaders.AUTHORIZATION, bearer()))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listCommitmentsWithoutTokenRejected() throws Exception {
+        WeeklyPlan plan = savedPlan(OWNER, PlanStatus.DRAFT);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId() + "/commitments"))
+            .andExpect(status().isUnauthorized());
     }
 
     // --- lock ---

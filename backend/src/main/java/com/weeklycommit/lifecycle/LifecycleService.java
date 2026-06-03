@@ -4,6 +4,7 @@ import com.weeklycommit.config.PrincipalResolver;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -108,6 +109,30 @@ public class LifecycleService {
         return planRepository
             .findByOwnerAndWeekKey(owner, weekKey)
             .orElseGet(() -> createDraft(owner, weekKey));
+    }
+
+    /**
+     * A specific plan by id, ownership-checked (404 missing, 403 wrong owner). Lets
+     * the IC frontend (workstream D) address a plan beyond the current week — a
+     * just-seeded carry-forward draft or a past week (UX-R19). Pure read, no
+     * transition.
+     */
+    @Transactional(readOnly = true)
+    public WeeklyPlanDto getPlan(UUID planId) {
+        return toDto(ownedPlanLoader.loadOwned(planId));
+    }
+
+    /**
+     * A plan's commitments (planned + unplanned), ownership-checked. The IC screen
+     * reads this to render commitment rows (UX-R18) — {@code WeeklyPlanDto} carries
+     * only a count, not the commitments themselves. Pure read.
+     */
+    @Transactional(readOnly = true)
+    public List<CommitmentDto> listCommitments(UUID planId) {
+        ownedPlanLoader.loadOwned(planId);
+        return commitmentRepository.findByWeeklyPlanId(planId).stream()
+            .map(CommitmentDto::from)
+            .toList();
     }
 
     /**

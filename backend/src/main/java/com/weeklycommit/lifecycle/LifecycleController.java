@@ -1,5 +1,6 @@
 package com.weeklycommit.lifecycle;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +32,25 @@ public class LifecycleController {
     @GetMapping("/api/lifecycle/plans/current")
     public WeeklyPlanDto currentPlan() {
         return service.getOrCreateCurrentPlan();
+    }
+
+    /**
+     * A specific plan by id (UX-R19) — for a non-current week the IC UI holds an id
+     * for (a carried-forward draft, a past week). Ownership-checked (404/403) in
+     * {@link LifecycleService}.
+     */
+    @GetMapping("/api/lifecycle/plans/{planId}")
+    public WeeklyPlanDto plan(@PathVariable UUID planId) {
+        return service.getPlan(planId);
+    }
+
+    /**
+     * A plan's commitments (UX-R18) — the IC screen reads this to render commitment
+     * rows, since the plan DTO carries only a count. Ownership-checked (404/403).
+     */
+    @GetMapping("/api/lifecycle/plans/{planId}/commitments")
+    public List<CommitmentDto> commitments(@PathVariable UUID planId) {
+        return service.listCommitments(planId);
     }
 
     /**
