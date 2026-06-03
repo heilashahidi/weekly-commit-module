@@ -1,0 +1,9 @@
+# Test profile. Datasource is supplied by Testcontainers @ServiceConnection.
+# Flyway applies the baseline; Hibernate then creates test-only fixture tables
+# (ddl-auto: update) on top — test fixtures must not pollute production migrations.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+  flyway:
+    enabled: true
