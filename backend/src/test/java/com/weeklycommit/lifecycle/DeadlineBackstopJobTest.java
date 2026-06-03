@@ -17,7 +17,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Deadline-backstop coverage (U7, KTD 6, R18/R19/R4/R5). Drives time through a
@@ -35,11 +34,13 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Runs against real embedded Postgres via {@link AbstractPostgresIT}.
  */
-// Roll back after each method: AbstractPostgresIT refreshes only AFTER_CLASS, so
-// without this, rows from one test pollute the finder-based assertions in the next.
-// Only the lifecycle tables are cleared — the V3 rcdo_node seed (commitment FK
-// target) must remain.
-@Transactional
+// NOT @Transactional at the class level: the backstop now advances each plan in its
+// own REQUIRES_NEW transaction (per-plan failure isolation), and a REQUIRES_NEW tx
+// cannot see rows still uncommitted in a suspended outer test transaction. So the
+// fixtures must be genuinely committed. Cleanup is handled by @BeforeEach reset(),
+// which deletes all lifecycle rows before each test (the V3 rcdo_node seed — the
+// commitment FK target — is left intact); AbstractPostgresIT refreshes the DB
+// AFTER_CLASS.
 @Import({TestPrincipalConfig.class, DeadlineBackstopJobTest.FixedClockConfig.class})
 class DeadlineBackstopJobTest extends AbstractPostgresIT {
 

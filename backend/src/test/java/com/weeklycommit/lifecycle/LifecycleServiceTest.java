@@ -142,30 +142,16 @@ class LifecycleServiceTest {
         assertThat(dto.statusDeadline()).isEqualTo(NOW.plus(LifecycleService.RECONCILE_CLOSE_OFFSET));
     }
 
-    @Test
-    void submitReconciledAdvancesReconcilingToReconciledAndClearsDeadline() {
-        UUID id = UUID.randomUUID();
-        when(principalResolver.currentPrincipal()).thenReturn(OWNER);
-        when(planRepository.findById(id))
-            .thenReturn(Optional.of(plan(id, OWNER, PlanStatus.RECONCILING)));
-        when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        WeeklyPlanDto dto = service().submitReconciled(id);
-
-        assertThat(dto.status()).isEqualTo(PlanStatus.RECONCILED);
-        assertThat(dto.statusDeadline()).isNull();
-    }
-
     // --- illegal transitions (409) ---
 
     @Test
-    void skipAheadDraftToReconciledRejected() {
+    void skipAheadDraftToReconcilingRejected() {
         UUID id = UUID.randomUUID();
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
         when(planRepository.findById(id)).thenReturn(Optional.of(plan(id, OWNER, PlanStatus.DRAFT)));
 
-        // submitReconciled targets RECONCILED, illegal from DRAFT.
-        assertThatThrownBy(() -> service().submitReconciled(id))
+        // startReconciling targets RECONCILING, illegal from DRAFT (legal edge is LOCKED).
+        assertThatThrownBy(() -> service().startReconciling(id))
             .isInstanceOf(ResponseStatusException.class)
             .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT));

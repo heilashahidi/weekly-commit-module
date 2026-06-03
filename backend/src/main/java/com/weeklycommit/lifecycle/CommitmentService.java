@@ -1,7 +1,9 @@
 package com.weeklycommit.lifecycle;
 
 import com.weeklycommit.config.PrincipalResolver;
+import com.weeklycommit.rcdo.RcdoNode;
 import com.weeklycommit.rcdo.RcdoNodeRepository;
+import com.weeklycommit.rcdo.RcdoNodeType;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -13,10 +15,11 @@ import org.springframework.web.server.ResponseStatusException;
  *
  * <ul>
  *   <li><b>R6 — strategy link required.</b> Every create/edit must reference an
- *       existing {@code rcdo_node}; a null or unknown {@code rcdoNodeId} is a 400.
- *       Existence is checked against {@link RcdoNodeRepository} (workstream B,
- *       consumed read-only) rather than relying on the DB FK, so the rejection is
- *       a clean 400 instead of a leaked constraint violation.
+ *       existing {@code rcdo_node} that is a {@link RcdoNodeType#SUPPORTING_OUTCOME};
+ *       a null or unknown {@code rcdoNodeId} is a 400, and a node of the wrong level
+ *       (e.g. a Rally Cry) is a 422. The node is loaded via {@link RcdoNodeRepository}
+ *       (workstream B, consumed read-only) rather than relying on the DB FK, so the
+ *       rejection is a clean 400/422 instead of a leaked constraint violation.
  *   <li><b>R8 — classification by plan status.</b> Creating on a {@code DRAFT}
  *       plan yields a planned commitment; on a {@code LOCKED} plan it is accepted
  *       as unplanned. Creating on a {@code RECONCILING}/{@code RECONCILED} plan is
@@ -104,12 +107,28 @@ public class CommitmentService {
         commitmentRepository.delete(c);
     }
 
-    /** R6: the link must be present and resolve to an existing RCDO node. */
+    /**
+     * R6: the link must be present, resolve to an existing RCDO node, and that node
+     * must be a {@link RcdoNodeType#SUPPORTING_OUTCOME}. A missing/unknown id is a
+     * 400; a node of the wrong level is a 422 (the resource exists, it just is not a
+     * legal link target).
+     */
     private void requireValidLink(UUID rcdoNodeId) {
-        if (rcdoNodeId == null || !rcdoNodeRepository.existsById(rcdoNodeId)) {
+        if (rcdoNodeId == null) {
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "A commitment must link to an existing Supporting Outcome");
+        }
+        RcdoNode node = rcdoNodeRepository.findById(rcdoNodeId).orElse(null);
+        if (node == null) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "A commitment must link to an existing Supporting Outcome");
+        }
+        if (node.getNodeType() != RcdoNodeType.SUPPORTING_OUTCOME) {
+            throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "Commitment must link to a Supporting Outcome");
         }
     }
 

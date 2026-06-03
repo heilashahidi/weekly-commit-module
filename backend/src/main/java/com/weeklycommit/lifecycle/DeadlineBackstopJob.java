@@ -3,9 +3,12 @@ package com.weeklycommit.lifecycle;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The deadline backstop (U7, KTD 6, R18/R19/R4/R5): a single scheduled sweep that
@@ -28,12 +31,22 @@ import org.springframework.transaction.annotation.Transactional;
  *       advances.
  * </ol>
  *
+ * <p><b>Per-plan isolation.</b> The top-level {@link #sweep()} is intentionally
+ * <em>not</em> transactional; it is the orchestrator. Each plan is advanced in its
+ * own {@code REQUIRES_NEW} transaction on the separate {@link LifecycleAutoAdvancer}
+ * bean, and each call is wrapped in try/catch. So if one plan's transition throws
+ * (e.g. it was concurrently advanced and the transition is now a 409), only that
+ * plan rolls back and is logged — the rest of the batch still commits, and the
+ * failure does not re-fail forever on every 60s pass. A top-level catch additionally
+ * guarantees an escaped error never kills the {@code @Scheduled} future.
+ *
  * <p>The legal state change for each edge runs through the shared
- * {@link LifecycleService#transition} primitive, so the transition table is not
- * duplicated; this job only adds the auto-path-specific provenance
- * ({@code AUTO_LOCKED}, {@code no_plan}, {@code UNRECONCILED}). {@code transition}
- * also resets/clears {@code statusDeadline}, so a plan advanced on a pass gets a
- * fresh deadline (and RECONCILED gets a null one) and is therefore not re-swept.
+ * {@link LifecycleService#transition} primitive (via {@link LifecycleAutoAdvancer}),
+ * so the transition table is not duplicated; only the auto-path-specific provenance
+ * ({@code AUTO_LOCKED}, {@code no_plan}, {@code UNRECONCILED}) is added.
+ * {@code transition} also resets/clears {@code statusDeadline}, so a plan advanced on
+ * a pass gets a fresh deadline (and RECONCILED gets a null one) and is therefore not
+ * re-swept.
  *
  * <p><b>Determinism.</b> All deadline math reads "now" from the injected
  * {@link Clock} (U0), so tests advance time and call {@link #sweep()} directly.
@@ -46,74 +59,69 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class DeadlineBackstopJob {
 
+    private static final Logger log = LoggerFactory.getLogger(DeadlineBackstopJob.class);
+
     private final WeeklyPlanRepository planRepository;
-    private final CommitmentRepository commitmentRepository;
-    private final LifecycleService lifecycleService;
+    private final LifecycleAutoAdvancer autoAdvancer;
     private final Clock clock;
 
     public DeadlineBackstopJob(
             WeeklyPlanRepository planRepository,
-            CommitmentRepository commitmentRepository,
-            LifecycleService lifecycleService,
+            LifecycleAutoAdvancer autoAdvancer,
             Clock clock) {
         this.planRepository = planRepository;
-        this.commitmentRepository = commitmentRepository;
-        this.lifecycleService = lifecycleService;
+        this.autoAdvancer = autoAdvancer;
         this.clock = clock;
     }
 
     /**
      * Sweeps all three forward edges for overdue plans. Scheduled in production
      * (default 60s between runs), but directly invokable by tests after advancing
-     * the clock. Runs in one transaction so all auto-advances on a pass commit
-     * together.
+     * the clock. Non-transactional orchestrator: each plan is advanced in its own
+     * transaction (see class doc) and per-plan failures are isolated and logged, so
+     * one bad plan never aborts the batch or kills the scheduler.
      */
     @Scheduled(fixedDelayString = "${wc.lifecycle.backstop-interval-ms:60000}")
-    @Transactional
     public void sweep() {
-        Instant now = Instant.now(clock);
-        autoLockOverdueDrafts(now);
-        autoStartReconcilingOverdueLocked(now);
-        autoCloseOverdueReconciling(now);
-    }
-
-    /** Edge 1: overdue DRAFT -> LOCKED, stamping AUTO_LOCKED (+ no_plan if empty). */
-    private void autoLockOverdueDrafts(Instant now) {
-        List<WeeklyPlan> overdue =
-            planRepository.findByStatusAndStatusDeadlineBefore(PlanStatus.DRAFT, now);
-        for (WeeklyPlan plan : overdue) {
-            lifecycleService.transition(plan, PlanStatus.LOCKED);
-            plan.setLockType(LockType.AUTO_LOCKED);
-            if (!commitmentRepository.existsByWeeklyPlanId(plan.getId())) {
-                plan.setNoPlan(true);
+        try {
+            Instant now = Instant.now(clock);
+            int locked = advanceEach(PlanStatus.DRAFT, now, autoAdvancer::autoLock);
+            int started = advanceEach(PlanStatus.LOCKED, now, autoAdvancer::autoStartReconciling);
+            int closed = advanceEach(PlanStatus.RECONCILING, now, autoAdvancer::autoClose);
+            if (locked + started + closed > 0) {
+                log.info(
+                    "Deadline backstop pass: auto-locked={}, auto-advanced-to-reconciling={}, "
+                        + "auto-closed={}",
+                    locked,
+                    started,
+                    closed);
             }
-            planRepository.save(plan);
+        } catch (RuntimeException e) {
+            // Never let an unexpected error escape and kill the @Scheduled future.
+            log.error("Deadline backstop sweep failed unexpectedly", e);
         }
     }
 
-    /** Edge 2: overdue LOCKED -> RECONCILING. */
-    private void autoStartReconcilingOverdueLocked(Instant now) {
-        List<WeeklyPlan> overdue =
-            planRepository.findByStatusAndStatusDeadlineBefore(PlanStatus.LOCKED, now);
+    /**
+     * Advances every overdue plan in {@code from} via {@code advance}, each in its
+     * own transaction. A per-plan failure is logged and skipped so the batch
+     * continues. Returns the count successfully advanced.
+     */
+    private int advanceEach(PlanStatus from, Instant now, Consumer<UUID> advance) {
+        List<WeeklyPlan> overdue = planRepository.findByStatusAndStatusDeadlineBefore(from, now);
+        int advanced = 0;
         for (WeeklyPlan plan : overdue) {
-            lifecycleService.transition(plan, PlanStatus.RECONCILING);
-            planRepository.save(plan);
-        }
-    }
-
-    /** Edge 3: overdue RECONCILING -> RECONCILED, filling UNRECONCILED first (R19). */
-    private void autoCloseOverdueReconciling(Instant now) {
-        List<WeeklyPlan> overdue =
-            planRepository.findByStatusAndStatusDeadlineBefore(PlanStatus.RECONCILING, now);
-        for (WeeklyPlan plan : overdue) {
-            for (Commitment c : commitmentRepository.findByWeeklyPlanId(plan.getId())) {
-                if (c.getReconciliationStatus() == null) {
-                    c.setReconciliationStatus(ReconciliationStatus.UNRECONCILED);
-                    commitmentRepository.save(c);
-                }
+            try {
+                advance.accept(plan.getId());
+                advanced++;
+            } catch (RuntimeException e) {
+                log.warn(
+                    "Deadline backstop failed to auto-advance plan {} from {}: {}",
+                    plan.getId(),
+                    from,
+                    e.toString());
             }
-            lifecycleService.transition(plan, PlanStatus.RECONCILED);
-            planRepository.save(plan);
         }
+        return advanced;
     }
 }

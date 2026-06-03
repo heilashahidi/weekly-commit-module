@@ -8,7 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.weeklycommit.config.PrincipalResolver;
+import com.weeklycommit.rcdo.RcdoNode;
 import com.weeklycommit.rcdo.RcdoNodeRepository;
+import com.weeklycommit.rcdo.RcdoNodeType;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,6 +76,19 @@ class CommitmentServiceTest {
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
     }
 
+    private RcdoNode rcdoNode(UUID id, RcdoNodeType type) {
+        RcdoNode n = new RcdoNode();
+        n.setId(id);
+        n.setNodeType(type);
+        n.setTitle("node");
+        return n;
+    }
+
+    private void rcdoNodeIsSupportingOutcome() {
+        when(rcdoNodeRepository.findById(RCDO_NODE_ID))
+            .thenReturn(Optional.of(rcdoNode(RCDO_NODE_ID, RcdoNodeType.SUPPORTING_OUTCOME)));
+    }
+
     // --- R6: RCDO link required ---
 
     @Test
@@ -97,12 +112,30 @@ class CommitmentServiceTest {
         principalIsOwner();
         when(planRepository.findById(planId))
             .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.DRAFT)));
-        when(rcdoNodeRepository.existsById(RCDO_NODE_ID)).thenReturn(false);
+        when(rcdoNodeRepository.findById(RCDO_NODE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(planId, RCDO_NODE_ID, "title"))
             .isInstanceOf(ResponseStatusException.class)
             .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST));
+
+        verify(commitmentRepository, never()).save(any());
+    }
+
+    @Test
+    void createRejectsRcdoNodeThatIsNotASupportingOutcome() {
+        // A node that exists but is the wrong level (e.g. a Rally Cry) -> 422 (R6).
+        UUID planId = UUID.randomUUID();
+        principalIsOwner();
+        when(planRepository.findById(planId))
+            .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.DRAFT)));
+        when(rcdoNodeRepository.findById(RCDO_NODE_ID))
+            .thenReturn(Optional.of(rcdoNode(RCDO_NODE_ID, RcdoNodeType.RALLY_CRY)));
+
+        assertThatThrownBy(() -> service.create(planId, RCDO_NODE_ID, "title"))
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
 
         verify(commitmentRepository, never()).save(any());
     }
@@ -115,7 +148,7 @@ class CommitmentServiceTest {
         principalIsOwner();
         when(planRepository.findById(planId))
             .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.DRAFT)));
-        when(rcdoNodeRepository.existsById(RCDO_NODE_ID)).thenReturn(true);
+        rcdoNodeIsSupportingOutcome();
         when(commitmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         CommitmentDto dto = service.create(planId, RCDO_NODE_ID, "title");
@@ -130,7 +163,7 @@ class CommitmentServiceTest {
         principalIsOwner();
         when(planRepository.findById(planId))
             .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.LOCKED)));
-        when(rcdoNodeRepository.existsById(RCDO_NODE_ID)).thenReturn(true);
+        rcdoNodeIsSupportingOutcome();
         when(commitmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         CommitmentDto dto = service.create(planId, RCDO_NODE_ID, "title");
@@ -182,7 +215,7 @@ class CommitmentServiceTest {
             .thenReturn(Optional.of(commitment(commitId, planId, false)));
         when(planRepository.findById(planId))
             .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.LOCKED)));
-        when(rcdoNodeRepository.existsById(RCDO_NODE_ID)).thenReturn(true);
+        rcdoNodeIsSupportingOutcome();
         when(commitmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         CommitmentDto dto = service.edit(commitId, RCDO_NODE_ID, "new title");
@@ -200,7 +233,7 @@ class CommitmentServiceTest {
             .thenReturn(Optional.of(commitment(commitId, planId, true)));
         when(planRepository.findById(planId))
             .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.DRAFT)));
-        when(rcdoNodeRepository.existsById(RCDO_NODE_ID)).thenReturn(true);
+        rcdoNodeIsSupportingOutcome();
         when(commitmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         CommitmentDto dto = service.edit(commitId, RCDO_NODE_ID, "new title");

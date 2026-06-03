@@ -1,6 +1,7 @@
 package com.weeklycommit.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -13,13 +14,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * running instance; multi-instance safety (ShedLock/Quartz) is deferred per Scope
  * Boundaries. For a single-instance build this is correct.
  *
- * <p><b>Test interference.</b> {@code @EnableScheduling} makes the real scheduler
- * active in every profile, but the sweep's {@code fixedDelay} default is 60s — far
- * longer than any integration test runs — so it will not fire mid-test. Tests drive
- * the backstop deterministically by calling {@code DeadlineBackstopJob.sweep()}
- * directly with a controlled {@link java.time.Clock}, never relying on the scheduler.
+ * <p><b>Test isolation.</b> This config is gated {@code @Profile("!test")} so the
+ * real scheduler is never active under the {@code test} profile — otherwise the
+ * production 60s sweep would fire mid-IT against the shared test DB and race the
+ * deterministic test fixtures. Tests drive the backstop by calling
+ * {@code DeadlineBackstopJob.sweep()} directly with a controlled
+ * {@link java.time.Clock}, so they never need {@code @EnableScheduling} active.
  */
 @Configuration
+@Profile("!test")
 @EnableScheduling
 public class SchedulingConfig {
 }

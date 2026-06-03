@@ -28,10 +28,9 @@ import org.springframework.web.server.ResponseStatusException;
  *
  * <p><b>U4/U5 seam resolution.</b> There is exactly one public submit-reconciled
  * endpoint and it enforces the gate: U5's {@link ReconciliationController} owns it,
- * backed by {@link #submit}. {@link LifecycleService#submitReconciled} (the raw,
- * ungated transition) is no longer exposed by {@code LifecycleController}; this
- * service composes over the package-visible {@link LifecycleService#transition}
- * primitive so the transition table is not duplicated.
+ * backed by {@link #submit}. No ungated submit exists; this service composes directly
+ * over the package-visible {@link LifecycleService#transition} primitive so the
+ * transition table is not duplicated.
  *
  * <p><b>Ownership.</b> Both operations require the owning plan to belong to the
  * current principal ({@link PrincipalResolver#currentPrincipal()}); a mismatch is a

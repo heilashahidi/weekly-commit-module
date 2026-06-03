@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -207,6 +208,59 @@ class CarryForwardServiceTest {
         assertThat(carried.get(0).carriedFromId()).isEqualTo(partial.getId());
         // Exactly one commitment saved — the unselected candidate was not carried.
         verify(commitmentRepository).save(any());
+    }
+
+    @Test
+    void carryingTwiceWithSameIdsCreatesOnlyOneCopyPerSource() {
+        // Idempotency: a second identical carry is a no-op for an already-carried
+        // source (its id appears as a carriedFromId in next week).
+        UUID planId = UUID.randomUUID();
+        UUID nextPlanId = UUID.randomUUID();
+        Commitment partial = commitment(planId, true, ReconciliationStatus.PARTIAL, 0);
+        when(principalResolver.currentPrincipal()).thenReturn(OWNER);
+        when(planRepository.findById(planId))
+            .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.RECONCILED, "2026-W23")));
+        when(commitmentRepository.findByWeeklyPlanIdAndPlanned(planId, true))
+            .thenReturn(List.of(partial));
+        when(planRepository.findByOwnerAndWeekKey(OWNER, "2026-W24"))
+            .thenReturn(Optional.of(plan(nextPlanId, OWNER, PlanStatus.DRAFT, "2026-W24")));
+        // Second pass: next week already holds a copy carried from `partial`.
+        Commitment existingCopy = commitment(nextPlanId, true, null, 1);
+        existingCopy.setCarriedFromId(partial.getId());
+        when(commitmentRepository.findByWeeklyPlanId(nextPlanId))
+            .thenReturn(List.of()) // first carry: nothing carried yet
+            .thenReturn(List.of(existingCopy)); // second carry: already carried
+        when(commitmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        List<CommitmentDto> first = service().carry(planId, List.of(partial.getId()));
+        List<CommitmentDto> second = service().carry(planId, List.of(partial.getId()));
+
+        assertThat(first).hasSize(1);
+        assertThat(second).isEmpty();
+        // Only the first carry persisted a copy; the second was a no-op.
+        verify(commitmentRepository, times(1)).save(any());
+    }
+
+    @Test
+    void carryIntoNonDraftNextWeekRejectedWithConflict() {
+        // R8/immutability: next week already LOCKED -> seeding planned commitments
+        // is a 409, not an insert.
+        UUID planId = UUID.randomUUID();
+        UUID nextPlanId = UUID.randomUUID();
+        Commitment partial = commitment(planId, true, ReconciliationStatus.PARTIAL, 0);
+        when(principalResolver.currentPrincipal()).thenReturn(OWNER);
+        when(planRepository.findById(planId))
+            .thenReturn(Optional.of(plan(planId, OWNER, PlanStatus.RECONCILED, "2026-W23")));
+        when(commitmentRepository.findByWeeklyPlanIdAndPlanned(planId, true))
+            .thenReturn(List.of(partial));
+        when(planRepository.findByOwnerAndWeekKey(OWNER, "2026-W24"))
+            .thenReturn(Optional.of(plan(nextPlanId, OWNER, PlanStatus.LOCKED, "2026-W24")));
+
+        assertThatThrownBy(() -> service().carry(planId, List.of(partial.getId())))
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT));
+        verify(commitmentRepository, never()).save(any());
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.weeklycommit.config.PrincipalResolver;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -72,7 +73,11 @@ public class CarryForwardService {
     /**
      * Seeds the owner's next-week {@code DRAFT} with the IC-selected subset of carry
      * candidates (R13/R14). The source plan must be {@code RECONCILED}; every id must
-     * be a valid candidate of it. Returns the newly created commitments.
+     * be a valid candidate of it; the next-week plan must still be {@code DRAFT}
+     * (else 409 — seeding planned commitments into a locked-or-later plan would
+     * violate R8/immutability). Idempotent: a source already carried into next week
+     * (its id present as a {@code carriedFromId} there) is skipped, so re-POSTing the
+     * same selection does not create duplicates. Returns the newly created commitments.
      */
     @Transactional
     public List<CommitmentDto> carry(UUID planId, List<UUID> selectedCommitmentIds) {
@@ -95,10 +100,30 @@ public class CarryForwardService {
         String nextWeekKey = WeekKey.nextWeek(plan.getWeekKey());
         WeeklyPlan nextPlan = lifecycleService.getOrCreatePlan(plan.getOwner(), nextWeekKey);
 
+        // R8/immutability: seeding planned commitments is only legal into a DRAFT.
+        // If next week has already been locked (or beyond), reject rather than insert.
+        if (nextPlan.getStatus() != PlanStatus.DRAFT) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Cannot carry into a plan that is no longer DRAFT (was " + nextPlan.getStatus() + ")");
+        }
+
+        // Idempotency: a source already carried into next week (its id appears as a
+        // carriedFromId there) is skipped, so re-POSTing /carry is a no-op for it
+        // rather than seeding a duplicate copy.
+        Set<UUID> alreadyCarried =
+            commitmentRepository.findByWeeklyPlanId(nextPlan.getId()).stream()
+                .map(Commitment::getCarriedFromId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
         List<CommitmentDto> carried = new ArrayList<>();
         for (Commitment source : candidates) {
             if (!selected.contains(source.getId())) {
                 continue; // IC-selected only (R13): unselected candidates are not carried.
+            }
+            if (alreadyCarried.contains(source.getId())) {
+                continue; // Already carried into next week (idempotent re-POST).
             }
             Commitment copy = new Commitment();
             copy.setWeeklyPlanId(nextPlan.getId());

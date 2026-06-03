@@ -35,12 +35,13 @@ import org.springframework.web.server.ResponseStatusException;
  * the backstop deterministically testable; the exact offset *values* are
  * configuration deferred per Scope Boundaries — these constants are sane defaults.
  *
- * <p><b>U4/U5 seam.</b> U4 owns the raw {@code RECONCILING -> RECONCILED}
- * transition legality and provenance via {@link #submitReconciled(UUID)}. The
- * "all commitments statused" GATE (R10) belongs to U5's {@code ReconciliationService},
- * which validates the precondition and then delegates to {@link #submitReconciled}
- * (or the package-visible {@link #transition} primitive) for the actual state
- * change. U4 does not duplicate the gate.
+ * <p><b>U4/U5 seam.</b> U4 owns the {@code RECONCILING -> RECONCILED} transition
+ * legality via the package-visible {@link #transition} primitive. The "all
+ * commitments statused" GATE (R10) belongs to U5's {@code ReconciliationService},
+ * which validates the precondition and then calls {@link #transition} for the actual
+ * state change. U4 does not duplicate the gate, and there is no separate ungated
+ * submit method here — the gated {@code ReconciliationService.submit} is the only
+ * path to RECONCILED.
  *
  * <p><b>Ownership.</b> Transitions act on the principal's own plan: either the
  * current-week plan from {@link #getOrCreateCurrentPlan()} or a {@code planId} that
@@ -130,18 +131,6 @@ public class LifecycleService {
     public WeeklyPlanDto startReconciling(UUID planId) {
         WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
         transition(plan, PlanStatus.RECONCILING);
-        return toDto(planRepository.save(plan));
-    }
-
-    /**
-     * Raw {@code RECONCILING -> RECONCILED} transition + provenance only. The
-     * "all commitments statused" gate (R10) is U5's {@code ReconciliationService},
-     * which wraps this — see the class-level U4/U5 seam note.
-     */
-    @Transactional
-    public WeeklyPlanDto submitReconciled(UUID planId) {
-        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
-        transition(plan, PlanStatus.RECONCILED);
         return toDto(planRepository.save(plan));
     }
 

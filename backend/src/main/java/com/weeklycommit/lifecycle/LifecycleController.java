@@ -57,8 +57,7 @@ public class LifecycleController {
 
     // NOTE (U4/U5 seam): the RECONCILING -> RECONCILED submit endpoint lives in
     // ReconciliationController (U5) and is the GATED one (all commitments statused,
-    // R10). The raw, ungated submit is intentionally NOT exposed here, so there is
-    // exactly one public path to RECONCILED and it always enforces the gate.
-    // LifecycleService.submitReconciled remains as the package-internal raw
-    // transition primitive that ReconciliationService composes over.
+    // R10). No raw, ungated submit is exposed anywhere, so there is exactly one
+    // public path to RECONCILED and it always enforces the gate. ReconciliationService
+    // composes directly over the package-internal LifecycleService.transition primitive.
 }

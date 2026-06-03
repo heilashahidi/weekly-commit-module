@@ -46,6 +46,18 @@ class LifecycleMigrationTest extends AbstractPostgresIT {
     }
 
     @Test
+    void statusDeadlineIndexMigrationAppliedExactlyOnce() {
+        MigrationInfo[] applied = flyway.info().applied();
+
+        long v6Applications = Arrays.stream(applied)
+            .filter(info -> info.getVersion() != null)
+            .filter(info -> "6".equals(info.getVersion().getVersion()))
+            .count();
+
+        assertThat(v6Applications).isEqualTo(1L);
+    }
+
+    @Test
     void contextLoadsWithMigratedSchemaAndEntityMapping() {
         // Reaching this assertion means @SpringBootTest started with the V4
         // migration applied and Hibernate accepted the WeeklyPlan mapping against
