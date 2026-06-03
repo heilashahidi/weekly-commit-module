@@ -10,10 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Confirms the V4 lifecycle schema migration applied and that the entity mapping
- * matches the migration. The mere fact that the Spring context loads (via
- * {@link AbstractPostgresIT}) proves WeeklyPlan and V4__weekly_plan_and_commitment.sql
- * agree on columns, types, and nullability — the entity/migration drift guard.
+ * Confirms the lifecycle schema migrations applied and that the entity mappings
+ * match the migrations. The mere fact that the Spring context loads (via
+ * {@link AbstractPostgresIT}) proves WeeklyPlan/Commitment/ManagerReview and their
+ * Flyway DDL (V4, V5) agree on columns, types, and nullability — the
+ * entity/migration drift guard.
  */
 class LifecycleMigrationTest extends AbstractPostgresIT {
 
@@ -30,6 +31,18 @@ class LifecycleMigrationTest extends AbstractPostgresIT {
             .count();
 
         assertThat(v4Applications).isEqualTo(1L);
+    }
+
+    @Test
+    void managerReviewMigrationAppliedExactlyOnce() {
+        MigrationInfo[] applied = flyway.info().applied();
+
+        long v5Applications = Arrays.stream(applied)
+            .filter(info -> info.getVersion() != null)
+            .filter(info -> "5".equals(info.getVersion().getVersion()))
+            .count();
+
+        assertThat(v5Applications).isEqualTo(1L);
     }
 
     @Test
