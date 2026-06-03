@@ -89,12 +89,21 @@ public class LifecycleService {
     @Transactional
     public WeeklyPlanDto getOrCreateCurrentPlan() {
         String owner = principalResolver.currentPrincipal();
-        String weekKey = WeekKey.current(clock);
-        WeeklyPlan plan =
-            planRepository
-                .findByOwnerAndWeekKey(owner, weekKey)
-                .orElseGet(() -> createDraft(owner, weekKey));
-        return toDto(plan);
+        return toDto(getOrCreatePlan(owner, WeekKey.current(clock)));
+    }
+
+    /**
+     * Returns {@code owner}'s plan for {@code weekKey}, creating a fresh {@code DRAFT}
+     * (with its lock deadline set) if none exists. The (owner, week_key) identity
+     * (KTD 7) makes this a single idempotent lookup. Package-visible so carry-forward
+     * (U8) can seed the <em>next</em> week's draft relative to a specific plan's week,
+     * rather than the current-clock week {@link #getOrCreateCurrentPlan()} uses.
+     */
+    @Transactional
+    WeeklyPlan getOrCreatePlan(String owner, String weekKey) {
+        return planRepository
+            .findByOwnerAndWeekKey(owner, weekKey)
+            .orElseGet(() -> createDraft(owner, weekKey));
     }
 
     /**
