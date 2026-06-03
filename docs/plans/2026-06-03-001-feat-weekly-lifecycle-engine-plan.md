@@ -1,7 +1,7 @@
 ---
 title: "feat: Weekly lifecycle engine (backend)"
 type: feat
-status: active
+status: completed
 date: 2026-06-03
 depth: deep
 workstream: C
