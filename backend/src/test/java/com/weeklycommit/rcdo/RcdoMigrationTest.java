@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.weeklycommit.support.AbstractPostgresIT;
 import java.util.Arrays;
+import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,9 @@ class RcdoMigrationTest extends AbstractPostgresIT {
 
     @Autowired
     Flyway flyway;
+
+    @Autowired
+    RcdoNodeRepository repository;
 
     @Test
     void rcdoTableMigrationAppliedExactlyOnce() {
@@ -40,5 +44,30 @@ class RcdoMigrationTest extends AbstractPostgresIT {
         // the migrated table. A column/type/nullability mismatch would have
         // failed context startup before this point.
         assertThat(flyway).isNotNull();
+    }
+
+    @Test
+    void seedTreeHasExactlyOneRootAndValidParentTypes() {
+        List<RcdoNode> all = repository.findAll();
+
+        // Exactly one Rally Cry root.
+        assertThat(all).filteredOn(n -> n.getParentId() == null)
+            .extracting(RcdoNode::getNodeType)
+            .containsExactly(RcdoNodeType.RALLY_CRY);
+
+        // Every non-root node's parent exists and is the legal parent type.
+        for (RcdoNode node : all) {
+            if (node.getParentId() == null) {
+                continue;
+            }
+            RcdoNode parent = repository.findById(node.getParentId()).orElseThrow();
+            RcdoNodeType expectedParent = switch (node.getNodeType()) {
+                case DEFINING_OBJECTIVE -> RcdoNodeType.RALLY_CRY;
+                case OUTCOME -> RcdoNodeType.DEFINING_OBJECTIVE;
+                case SUPPORTING_OUTCOME -> RcdoNodeType.OUTCOME;
+                case RALLY_CRY -> null;
+            };
+            assertThat(parent.getNodeType()).isEqualTo(expectedParent);
+        }
     }
 }

@@ -7,6 +7,7 @@ import com.weeklycommit.config.PrincipalResolver;
 import com.weeklycommit.support.AbstractPostgresIT;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -41,6 +42,14 @@ class RcdoNodeRepositoryTest extends AbstractPostgresIT {
 
     @Autowired
     RcdoNodeRepository repository;
+
+    @BeforeEach
+    void clearSeed() {
+        // V3 seeds a full tree at startup; these tests assert on exact counts, so
+        // start each from an empty table. Single DELETE FROM (no per-row self-FK
+        // ordering issue); rolled back by @Transactional, restoring the seed.
+        repository.deleteAllInBatch();
+    }
 
     private RcdoNode node(RcdoNodeType type, String title, UUID parentId) {
         RcdoNode n = new RcdoNode();
