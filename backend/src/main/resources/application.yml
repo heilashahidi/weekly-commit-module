@@ -18,6 +18,12 @@ spring:
         format_sql: false
   flyway:
     enabled: true
+  mvc:
+    problemdetails:
+      # Surface ResponseStatusException reason phrases (e.g. "Illegal transition",
+      # "Plan belongs to another principal") to clients as RFC 7807 ProblemDetail
+      # bodies; without this Spring drops the message and returns a bare status.
+      enabled: true
 
 server:
   port: ${WC_SERVER_PORT:8080}
