@@ -43,12 +43,10 @@ public class LifecycleController {
         return service.startReconciling(planId);
     }
 
-    /**
-     * Manual {@code RECONCILING -> RECONCILED}. The all-statused gate (R10) is
-     * added by U5's reconciliation controller; this exposes the raw transition.
-     */
-    @PostMapping("/api/lifecycle/plans/{planId}/transitions/submit-reconciled")
-    public WeeklyPlanDto submitReconciled(@PathVariable UUID planId) {
-        return service.submitReconciled(planId);
-    }
+    // NOTE (U4/U5 seam): the RECONCILING -> RECONCILED submit endpoint lives in
+    // ReconciliationController (U5) and is the GATED one (all commitments statused,
+    // R10). The raw, ungated submit is intentionally NOT exposed here, so there is
+    // exactly one public path to RECONCILED and it always enforces the gate.
+    // LifecycleService.submitReconciled remains as the package-internal raw
+    // transition primitive that ReconciliationService composes over.
 }
