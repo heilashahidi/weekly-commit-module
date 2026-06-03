@@ -8,8 +8,8 @@ import java.util.UUID;
  * don't leak persistence concerns (audit fields, lazy associations) and the
  * frontend gets a clean nested tree.
  *
- * <p>For the full-tree endpoint, {@code children} holds the nested subtree. For
- * single-node resolve, {@code children} holds the node's direct children only.
+ * <p>{@code children} always holds the full nested subtree (never null, possibly
+ * empty), the same shape from both {@code /tree} and {@code /nodes/{id}}.
  */
 public record RcdoNodeDto(
     UUID id,

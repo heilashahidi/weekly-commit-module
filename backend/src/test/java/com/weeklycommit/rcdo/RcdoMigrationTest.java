@@ -38,11 +38,14 @@ class RcdoMigrationTest extends AbstractPostgresIT {
     }
 
     @Test
-    void contextLoadsUnderValidateProvingEntityMatchesSchema() {
-        // Reaching this assertion means @SpringBootTest started with
-        // ddl-auto: validate and Hibernate accepted the RcdoNode mapping against
-        // the migrated table. A column/type/nullability mismatch would have
-        // failed context startup before this point.
+    void contextLoadsWithMigratedSchemaAndEntityMapping() {
+        // Reaching this assertion means @SpringBootTest started with the V2
+        // migration applied and Hibernate accepted the RcdoNode mapping against
+        // the migrated table. Note: the test profile uses ddl-auto: update (so
+        // Hibernate can add test-fixture tables), which is more lenient than
+        // production's validate — it does not catch every column-type nuance
+        // (e.g. timestamp vs timestamptz). It does prove the migration applies
+        // cleanly and the entity loads against the real Postgres schema.
         assertThat(flyway).isNotNull();
     }
 

@@ -77,6 +77,17 @@ describe('RcdoTree', () => {
     );
   });
 
+  it('renders the empty state when the tree has no nodes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse([])),
+    );
+    renderWithStore(<RcdoTree />);
+    await waitFor(() => expect(screen.getByText(/No strategy nodes yet/)).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+  });
+
   it('renders an error state when the query fails', async () => {
     vi.stubGlobal(
       'fetch',

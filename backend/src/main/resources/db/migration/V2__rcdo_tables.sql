@@ -11,11 +11,14 @@ CREATE TABLE rcdo_node (
     description        TEXT,
     parent_id          UUID         REFERENCES rcdo_node (id),
     sort_order         INTEGER      NOT NULL DEFAULT 0,
-    -- Inherited from AbstractAuditingEntity. Populated by Spring Data auditing on
-    -- JPA writes; the seed migration (V3) sets them explicitly since auditing
-    -- listeners do not fire on raw SQL inserts.
-    created_date       TIMESTAMP,
-    last_modified_date TIMESTAMP,
+    -- Inherited from AbstractAuditingEntity. TIMESTAMPTZ (not plain TIMESTAMP) to
+    -- match Hibernate's default mapping for the entity's java.time.Instant fields;
+    -- a plain TIMESTAMP would interpret the UTC instant against the session zone
+    -- and shift it. Populated by Spring Data auditing on JPA writes; the seed
+    -- migration (V3) sets them explicitly since auditing listeners do not fire on
+    -- raw SQL inserts.
+    created_date       TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ,
     created_by         VARCHAR(255),
     last_modified_by   VARCHAR(255)
 );
