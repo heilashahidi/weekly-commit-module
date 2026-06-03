@@ -7,14 +7,32 @@ interface HealthResponse {
   status: string;
 }
 
+export type RcdoNodeType =
+  | 'RALLY_CRY'
+  | 'DEFINING_OBJECTIVE'
+  | 'OUTCOME'
+  | 'SUPPORTING_OUTCOME';
+
+/** Mirrors the backend RcdoNodeDto. `children` nests the subtree (full-tree
+ * endpoint) or the node's direct children (single-node resolve). */
+export interface RcdoNode {
+  id: string;
+  nodeType: RcdoNodeType;
+  title: string;
+  description: string | null;
+  parentId: string | null;
+  children: RcdoNode[];
+}
+
 /**
- * Project-wide RTK Query base slice. The only cross-cutting concern wired here is
- * in-memory bearer-token injection. Tag-based invalidation is the documented
- * convention for feature slices to adopt — no placeholder tags are scaffolded
- * here, since there are no consumers yet.
+ * Project-wide RTK Query base slice. The only cross-cutting concern wired in the
+ * base query is in-memory bearer-token injection. Feature endpoints declare their
+ * own tag types for cache invalidation; RCDO is read-only today, so its tree
+ * query only `providesTags` — the management workstream pairs `invalidatesTags`.
  */
 export const api = createApi({
   reducerPath: 'api',
+  tagTypes: ['RcdoNode'],
   baseQuery: fetchBaseQuery({
     baseUrl: API_BASE_URL,
     // Resolve fetch per call (not captured at module load) so the global is
@@ -32,7 +50,15 @@ export const api = createApi({
     getHealth: builder.query<HealthResponse, void>({
       query: () => '/health',
     }),
+    getRcdoTree: builder.query<RcdoNode[], void>({
+      query: () => '/api/rcdo/tree',
+      providesTags: ['RcdoNode'],
+    }),
+    getRcdoNode: builder.query<RcdoNode, string>({
+      query: (id) => `/api/rcdo/nodes/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'RcdoNode' as const, id }],
+    }),
   }),
 });
 
-export const { useGetHealthQuery } = api;
+export const { useGetHealthQuery, useGetRcdoTreeQuery, useGetRcdoNodeQuery } = api;
