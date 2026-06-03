@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { Button } from 'flowbite-react';
 import {
-  useCreateCommitmentMutation,
   useGetPlanCommitmentsQuery,
   useStartReconcilingMutation,
-  type RcdoNode,
   type WeeklyPlanDto,
 } from '../../store/api';
 import { problemDetailMessage } from '../../lib/problemDetail';
+import { formatTimestamp } from '../../lib/formatTimestamp';
+import CommitmentForm from '../../components/CommitmentForm';
 import CommitmentRow from '../../components/CommitmentRow';
 import ManagerReviewNote from '../../components/ManagerReviewNote';
-import RcdoPicker from '../../components/RcdoPicker';
 
 interface ModeViewProps {
   plan: WeeklyPlanDto;
@@ -25,99 +24,10 @@ function AutoAdvanceDeadline({ deadline }: { deadline: string | null }) {
   if (!deadline) {
     return null;
   }
-  const parsed = new Date(deadline);
-  const text = Number.isNaN(parsed.getTime()) ? deadline : parsed.toLocaleString();
   return (
     <p className="text-sm text-gray-500">
-      Auto-advance deadline: <time dateTime={deadline}>{text}</time>
+      Auto-advance deadline: <time dateTime={deadline}>{formatTimestamp(deadline)}</time>
     </p>
-  );
-}
-
-/**
- * Add-unplanned form. A small local form mirroring DraftView's CommitmentForm
- * gate behavior (title + Supporting Outcome both required, UX-R4/AE-D1) — the
- * link stays unskippable in LOCKED too. The server flags the created commitment
- * `planned=false` (AE-D5); after tag invalidation the refetched list shows it
- * with the `unplanned` badge while planned rows stay frozen. Kept local rather
- * than extracting CommitmentForm (no DraftView refactor in this unit); the
- * LOCKED form never edits, so it's deliberately the create-only subset.
- */
-function AddUnplannedForm({ planId, onDone }: { planId: string; onDone: () => void }) {
-  const [title, setTitle] = useState('');
-  const [selected, setSelected] = useState<RcdoNode | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const [createCommitment, createState] = useCreateCommitmentMutation();
-
-  const canSave = title.trim().length > 0 && selected !== null;
-
-  async function handleSave() {
-    if (!canSave || selected === null) {
-      return;
-    }
-    try {
-      await createCommitment({
-        planId,
-        body: { rcdoNodeId: selected.id, title: title.trim() },
-      }).unwrap();
-      onDone();
-    } catch {
-      // Error surfaced below via the mutation state; keep the form open.
-    }
-  }
-
-  return (
-    <div className="space-y-2 rounded border border-gray-200 p-3">
-      <label
-        className="block text-sm font-medium text-gray-700"
-        htmlFor="unplanned-commitment-title"
-      >
-        Unplanned commitment title
-      </label>
-      <input
-        id="unplanned-commitment-title"
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="What came up this week?"
-        className="w-full rounded border border-gray-300 px-2 py-1"
-      />
-
-      <div className="flex items-center gap-2">
-        <Button type="button" color="light" onClick={() => setPickerOpen(true)}>
-          Pick Supporting Outcome
-        </Button>
-        {selected ? (
-          <span className="text-sm text-blue-700" data-testid="selected-outcome">
-            {selected.title}
-          </span>
-        ) : (
-          <span className="text-sm text-gray-400">No Supporting Outcome selected</span>
-        )}
-      </div>
-
-      {createState.error && (
-        <p role="alert" className="text-sm text-red-600">
-          {problemDetailMessage(createState.error)}
-        </p>
-      )}
-
-      <div className="flex gap-2">
-        <Button type="button" onClick={() => void handleSave()} disabled={!canSave}>
-          Add unplanned commitment
-        </Button>
-        <Button type="button" color="light" onClick={onDone}>
-          Cancel
-        </Button>
-      </div>
-
-      <RcdoPicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onSelect={(node) => setSelected(node)}
-      />
-    </div>
   );
 }
 
@@ -179,7 +89,14 @@ export default function LockedView({ plan }: ModeViewProps) {
           )}
 
           {adding ? (
-            <AddUnplannedForm planId={plan.id} onDone={() => setAdding(false)} />
+            <CommitmentForm
+              planId={plan.id}
+              onDone={() => setAdding(false)}
+              titleLabel="Unplanned commitment title"
+              inputId="unplanned-commitment-title"
+              placeholder="What came up this week?"
+              submitLabel="Add unplanned commitment"
+            />
           ) : (
             <Button type="button" onClick={() => setAdding(true)}>
               Add unplanned commitment

@@ -1,126 +1,18 @@
 import { useState } from 'react';
 import { Button, Modal } from 'flowbite-react';
 import {
-  useCreateCommitmentMutation,
   useDeleteCommitmentMutation,
   useGetPlanCommitmentsQuery,
   useLockMutation,
-  useUpdateCommitmentMutation,
   type CommitmentDto,
-  type RcdoNode,
   type WeeklyPlanDto,
 } from '../../store/api';
 import { problemDetailMessage } from '../../lib/problemDetail';
+import CommitmentForm from '../../components/CommitmentForm';
 import CommitmentRow from '../../components/CommitmentRow';
-import RcdoPicker from '../../components/RcdoPicker';
 
 interface ModeViewProps {
   plan: WeeklyPlanDto;
-}
-
-/**
- * The add/edit form. Reused for both creating a new commitment and editing an
- * existing one (`editing` carries the row under edit). A title field plus a
- * **Pick Supporting Outcome** button that opens the {@link RcdoPicker}. Save is
- * disabled until an Outcome is selected (UX-R4 / AE-D1) — and no create/update
- * request fires without one, because `handleSave` guards on `selected`.
- */
-function CommitmentForm({
-  planId,
-  editing,
-  onDone,
-}: {
-  planId: string;
-  editing: CommitmentDto | null;
-  onDone: () => void;
-}) {
-  const [title, setTitle] = useState(editing ? editing.title : '');
-  const [selected, setSelected] = useState<RcdoNode | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const [createCommitment, createState] = useCreateCommitmentMutation();
-  const [updateCommitment, updateState] = useUpdateCommitmentMutation();
-
-  // For an existing row we already have a linked Outcome (rcdoNodeId); the IC may
-  // keep it or re-pick. The save gate requires a chosen node for a *new* row;
-  // when editing, the existing link counts unless the IC re-picks.
-  const effectiveNodeId = selected ? selected.id : editing ? editing.rcdoNodeId : null;
-  const canSave = title.trim().length > 0 && effectiveNodeId !== null;
-
-  const error = createState.error ?? updateState.error;
-
-  async function handleSave() {
-    if (!canSave || effectiveNodeId === null) {
-      return;
-    }
-    const body = { rcdoNodeId: effectiveNodeId, title: title.trim() };
-    try {
-      if (editing) {
-        await updateCommitment({ id: editing.id, body }).unwrap();
-      } else {
-        await createCommitment({ planId, body }).unwrap();
-      }
-      onDone();
-    } catch {
-      // Error surfaced below via the mutation state; keep the form open.
-    }
-  }
-
-  const selectedLabel = selected
-    ? selected.title
-    : editing
-      ? `Linked outcome ${editing.rcdoNodeId}`
-      : null;
-
-  return (
-    <div className="space-y-2 rounded border border-gray-200 p-3">
-      <label className="block text-sm font-medium text-gray-700" htmlFor="commitment-title">
-        Commitment title
-      </label>
-      <input
-        id="commitment-title"
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="What will you commit to?"
-        className="w-full rounded border border-gray-300 px-2 py-1"
-      />
-
-      <div className="flex items-center gap-2">
-        <Button type="button" color="light" onClick={() => setPickerOpen(true)}>
-          Pick Supporting Outcome
-        </Button>
-        {selectedLabel ? (
-          <span className="text-sm text-blue-700" data-testid="selected-outcome">
-            {selectedLabel}
-          </span>
-        ) : (
-          <span className="text-sm text-gray-400">No Supporting Outcome selected</span>
-        )}
-      </div>
-
-      {error && (
-        <p role="alert" className="text-sm text-red-600">
-          {problemDetailMessage(error)}
-        </p>
-      )}
-
-      <div className="flex gap-2">
-        <Button type="button" onClick={() => void handleSave()} disabled={!canSave}>
-          {editing ? 'Save changes' : 'Add commitment'}
-        </Button>
-        <Button type="button" color="light" onClick={onDone}>
-          Cancel
-        </Button>
-      </div>
-
-      <RcdoPicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onSelect={(node) => setSelected(node)}
-      />
-    </div>
-  );
 }
 
 /** Confirm modal for the consequential Lock action (UX-R6). Warns distinctly

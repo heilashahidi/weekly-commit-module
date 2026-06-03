@@ -1,4 +1,5 @@
 import { useGetManagerReviewQuery } from '../store/api';
+import { formatTimestamp } from '../lib/formatTimestamp';
 
 /**
  * Read-only display of a manager's review comment on a plan (UX-R13, AE-D9 display half).
@@ -23,19 +24,13 @@ export default function ManagerReviewNote({ planId }: { planId: string }) {
     return null;
   }
 
-  // Absolute local timestamp with raw-string fallback if unparseable
-  // (mirrors StatusDeadline in MyWeek.tsx).
-  const parsed = new Date(data.reviewedAt);
-  const reviewedAtText = Number.isNaN(parsed.getTime())
-    ? data.reviewedAt
-    : parsed.toLocaleString();
-
   return (
     <section aria-label="Manager review" className="rounded border border-gray-200 bg-gray-50 p-3">
       <p className="text-sm font-medium text-gray-700">Manager review</p>
       <p className="mt-1 text-sm text-gray-700">{data.comment}</p>
       <p className="mt-2 text-xs text-gray-500">
-        — {data.reviewer}, <time dateTime={data.reviewedAt}>{reviewedAtText}</time>
+        — {data.reviewer},{' '}
+        <time dateTime={data.reviewedAt}>{formatTimestamp(data.reviewedAt)}</time>
       </p>
     </section>
   );

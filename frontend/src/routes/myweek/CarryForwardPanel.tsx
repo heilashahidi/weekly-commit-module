@@ -3,42 +3,13 @@ import { Button } from 'flowbite-react';
 import {
   useCarryMutation,
   useGetCarryCandidatesQuery,
-  useGetRcdoNodeQuery,
   type CarryCandidateDto,
 } from '../../store/api';
 import { problemDetailMessage } from '../../lib/problemDetail';
+import LinkedOutcome from '../../components/LinkedOutcome';
 
 interface CarryForwardPanelProps {
   planId: string;
-}
-
-/**
- * Resolves the linked RCDO Supporting Outcome title for a candidate, mirroring
- * `LinkedOutcome` in CommitmentRow: `CarryCandidateDto` only carries the
- * `rcdoNodeId`, so we fetch the node via the existing `getRcdoNode` query
- * (cached + de-duped by RTK Query across rows). Pending → graceful placeholder;
- * error/absent → fall back to the id. This is optional polish over the title +
- * week-count; the spine stays visible so the IC sees what each candidate links
- * to before carrying it forward.
- */
-function CandidateOutcome({ rcdoNodeId }: { rcdoNodeId: string }) {
-  const { data, isLoading } = useGetRcdoNodeQuery(rcdoNodeId);
-  let title: string;
-  if (data) {
-    title = data.title;
-  } else if (isLoading) {
-    title = 'Loading…';
-  } else {
-    title = rcdoNodeId;
-  }
-  return (
-    <p className="text-sm font-medium text-blue-700">
-      <span className="text-xs uppercase tracking-wide text-gray-400">
-        Supporting Outcome:{' '}
-      </span>
-      {title}
-    </p>
-  );
 }
 
 /**
@@ -135,7 +106,7 @@ export default function CarryForwardPanel({ planId }: CarryForwardPanelProps) {
                       onChange={() => toggle(candidate.id)}
                     />
                     <div className="min-w-0">
-                      <CandidateOutcome rcdoNodeId={candidate.rcdoNodeId} />
+                      <LinkedOutcome rcdoNodeId={candidate.rcdoNodeId} />
                       <p className="text-gray-800">{candidate.title}</p>
                       <p className="text-xs text-gray-500" data-testid="carry-week-count">
                         Carried {candidate.carryWeekCount}{' '}

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useGetCurrentPlanQuery, type WeeklyPlanDto } from '../store/api';
 import { problemDetailMessage } from '../lib/problemDetail';
+import { formatTimestamp } from '../lib/formatTimestamp';
 import StatusBadge from '../components/StatusBadge';
 
 // Heavier mode sub-views load behind a lazy boundary (KTD 1 / UX-R16, UX-R17),
@@ -34,11 +35,9 @@ function StatusDeadline({ deadline }: { deadline: string | null }) {
   if (!deadline) {
     return null;
   }
-  const parsed = new Date(deadline);
-  const text = Number.isNaN(parsed.getTime()) ? deadline : parsed.toLocaleString();
   return (
     <p className="text-sm text-gray-500">
-      Deadline: <time dateTime={deadline}>{text}</time>
+      Deadline: <time dateTime={deadline}>{formatTimestamp(deadline)}</time>
     </p>
   );
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { useGetRcdoNodeQuery, type CommitmentDto } from '../store/api';
+import type { CommitmentDto } from '../store/api';
+import LinkedOutcome from './LinkedOutcome';
 
 /**
  * The three lifecycle modes a commitment row renders in (KTD reuse seam):
@@ -33,36 +34,6 @@ export interface CommitmentRowProps {
    * component importing the reconcile mutation.
    */
   renderStatusControl?: (commitment: CommitmentDto) => ReactNode;
-}
-
-/**
- * Resolves and renders the linked RCDO Supporting Outcome title for a committed
- * row. `CommitmentDto` only carries `rcdoNodeId`, so we fetch the node per row
- * via the existing `getRcdoNode` query (cached + de-duped by RTK Query across
- * rows sharing an Outcome). Pending → show a graceful placeholder; error/absent →
- * fall back to the id rather than blocking the row. This keeps the spine always
- * visible (UX-R5) without threading the node down from every caller. (Richer
- * ancestry context beyond the title is deferred — the parent id alone is a UUID,
- * not human context, so we show only the resolved title.)
- */
-function LinkedOutcome({ rcdoNodeId }: { rcdoNodeId: string }) {
-  const { data, isLoading } = useGetRcdoNodeQuery(rcdoNodeId);
-  let title: string;
-  if (data) {
-    title = data.title;
-  } else if (isLoading) {
-    title = 'Loading…';
-  } else {
-    title = rcdoNodeId;
-  }
-  return (
-    <p className="text-sm font-medium text-blue-700">
-      <span className="text-xs uppercase tracking-wide text-gray-400">
-        Supporting Outcome:{' '}
-      </span>
-      {title}
-    </p>
-  );
 }
 
 /**
