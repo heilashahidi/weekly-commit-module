@@ -46,18 +46,15 @@ public class CarryForwardService {
         EnumSet.of(ReconciliationStatus.PARTIAL, ReconciliationStatus.NOT_DONE);
 
     private final CommitmentRepository commitmentRepository;
-    private final WeeklyPlanRepository planRepository;
-    private final PrincipalResolver principalResolver;
+    private final OwnedPlanLoader ownedPlanLoader;
     private final LifecycleService lifecycleService;
 
     public CarryForwardService(
             CommitmentRepository commitmentRepository,
-            WeeklyPlanRepository planRepository,
-            PrincipalResolver principalResolver,
+            OwnedPlanLoader ownedPlanLoader,
             LifecycleService lifecycleService) {
         this.commitmentRepository = commitmentRepository;
-        this.planRepository = planRepository;
-        this.principalResolver = principalResolver;
+        this.ownedPlanLoader = ownedPlanLoader;
         this.lifecycleService = lifecycleService;
     }
 
@@ -67,8 +64,8 @@ public class CarryForwardService {
      */
     @Transactional(readOnly = true)
     public List<CarryCandidateDto> listCandidates(UUID planId) {
-        WeeklyPlan plan = loadOwnedPlan(planId);
-        requireReconciled(plan);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
+        ownedPlanLoader.requireStatus(plan, PlanStatus.RECONCILED);
         return candidates(planId).stream().map(CarryCandidateDto::from).toList();
     }
 
@@ -79,8 +76,8 @@ public class CarryForwardService {
      */
     @Transactional
     public List<CommitmentDto> carry(UUID planId, List<UUID> selectedCommitmentIds) {
-        WeeklyPlan plan = loadOwnedPlan(planId);
-        requireReconciled(plan);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
+        ownedPlanLoader.requireStatus(plan, PlanStatus.RECONCILED);
 
         List<Commitment> candidates = candidates(planId);
         Set<UUID> candidateIds =
@@ -122,24 +119,4 @@ public class CarryForwardService {
             .toList();
     }
 
-    private void requireReconciled(WeeklyPlan plan) {
-        if (plan.getStatus() != PlanStatus.RECONCILED) {
-            throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Carry-forward is only available once the plan is RECONCILED (was "
-                    + plan.getStatus() + ")");
-        }
-    }
-
-    /** Loads a plan, 404 if missing, 403 if not owned by the current principal. */
-    private WeeklyPlan loadOwnedPlan(UUID planId) {
-        WeeklyPlan plan = planRepository.findById(planId)
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Weekly plan not found"));
-        if (!plan.getOwner().equals(principalResolver.currentPrincipal())) {
-            throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN, "Plan belongs to another principal");
-        }
-        return plan;
-    }
 }

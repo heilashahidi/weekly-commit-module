@@ -11,9 +11,9 @@ import com.weeklycommit.config.PrincipalResolver;
 import com.weeklycommit.rcdo.RcdoNodeRepository;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -43,8 +43,14 @@ class CommitmentServiceTest {
     @Mock
     PrincipalResolver principalResolver;
 
-    @InjectMocks
     CommitmentService service;
+
+    @BeforeEach
+    void setUp() {
+        OwnedPlanLoader ownedPlanLoader =
+            new OwnedPlanLoader(planRepository, commitmentRepository, principalResolver);
+        service = new CommitmentService(commitmentRepository, rcdoNodeRepository, ownedPlanLoader);
+    }
 
     private WeeklyPlan plan(UUID id, String owner, PlanStatus status) {
         WeeklyPlan p = new WeeklyPlan();

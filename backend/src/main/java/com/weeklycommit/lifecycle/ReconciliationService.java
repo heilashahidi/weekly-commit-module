@@ -42,17 +42,17 @@ public class ReconciliationService {
 
     private final CommitmentRepository commitmentRepository;
     private final WeeklyPlanRepository planRepository;
-    private final PrincipalResolver principalResolver;
+    private final OwnedPlanLoader ownedPlanLoader;
     private final LifecycleService lifecycleService;
 
     public ReconciliationService(
             CommitmentRepository commitmentRepository,
             WeeklyPlanRepository planRepository,
-            PrincipalResolver principalResolver,
+            OwnedPlanLoader ownedPlanLoader,
             LifecycleService lifecycleService) {
         this.commitmentRepository = commitmentRepository;
         this.planRepository = planRepository;
-        this.principalResolver = principalResolver;
+        this.ownedPlanLoader = ownedPlanLoader;
         this.lifecycleService = lifecycleService;
     }
 
@@ -68,9 +68,9 @@ public class ReconciliationService {
                 HttpStatus.UNPROCESSABLE_ENTITY,
                 "Reconciliation status must be one of DONE, PARTIAL, NOT_DONE, DROPPED");
         }
-        Commitment c = loadCommitment(commitmentId);
-        WeeklyPlan plan = loadOwnedPlan(c.getWeeklyPlanId());
-        requireReconciling(plan);
+        Commitment c = ownedPlanLoader.loadCommitment(commitmentId);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(c.getWeeklyPlanId());
+        ownedPlanLoader.requireStatus(plan, PlanStatus.RECONCILING);
 
         c.setReconciliationStatus(status);
         c.setReconciliationNote(note);
@@ -86,8 +86,8 @@ public class ReconciliationService {
      */
     @Transactional
     public WeeklyPlanDto submit(UUID planId) {
-        WeeklyPlan plan = loadOwnedPlan(planId);
-        requireReconciling(plan);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
+        ownedPlanLoader.requireStatus(plan, PlanStatus.RECONCILING);
 
         List<Commitment> commitments = commitmentRepository.findByWeeklyPlanId(planId);
         boolean anyUnstatused =
@@ -103,31 +103,4 @@ public class ReconciliationService {
         return WeeklyPlanDto.from(saved, commitments.size());
     }
 
-    private void requireReconciling(WeeklyPlan plan) {
-        if (plan.getStatus() != PlanStatus.RECONCILING) {
-            throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Reconciliation is only allowed while the plan is RECONCILING (was "
-                    + plan.getStatus() + ")");
-        }
-    }
-
-    /** Loads the commitment, 404 if missing. */
-    private Commitment loadCommitment(UUID commitmentId) {
-        return commitmentRepository.findById(commitmentId)
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Commitment not found"));
-    }
-
-    /** Loads a plan, 404 if missing, 403 if not owned by the current principal. */
-    private WeeklyPlan loadOwnedPlan(UUID planId) {
-        WeeklyPlan plan = planRepository.findById(planId)
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Weekly plan not found"));
-        if (!plan.getOwner().equals(principalResolver.currentPrincipal())) {
-            throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN, "Plan belongs to another principal");
-        }
-        return plan;
-    }
 }

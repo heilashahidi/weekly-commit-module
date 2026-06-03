@@ -11,7 +11,6 @@ import com.weeklycommit.config.PrincipalResolver;
 import com.weeklycommit.lifecycle.support.MutableClock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -45,10 +44,13 @@ class LifecycleServiceTest {
     PrincipalResolver principalResolver;
 
     private LifecycleService service() {
+        OwnedPlanLoader ownedPlanLoader =
+            new OwnedPlanLoader(planRepository, commitmentRepository, principalResolver);
         return new LifecycleService(
             planRepository,
             commitmentRepository,
             principalResolver,
+            ownedPlanLoader,
             new MutableClock(NOW, ZoneOffset.UTC));
     }
 
@@ -61,12 +63,6 @@ class LifecycleServiceTest {
         return p;
     }
 
-    private Commitment commitment() {
-        Commitment c = new Commitment();
-        c.setId(UUID.randomUUID());
-        return c;
-    }
-
     // --- get-or-create ---
 
     @Test
@@ -74,7 +70,7 @@ class LifecycleServiceTest {
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
         when(planRepository.findByOwnerAndWeekKey(OWNER, WEEK_KEY)).thenReturn(Optional.empty());
         when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(commitmentRepository.findByWeeklyPlanId(any())).thenReturn(List.of());
+        when(commitmentRepository.countByWeeklyPlanId(any())).thenReturn(0L);
 
         WeeklyPlanDto dto = service().getOrCreateCurrentPlan();
 
@@ -90,7 +86,7 @@ class LifecycleServiceTest {
         WeeklyPlan existing = plan(UUID.randomUUID(), OWNER, PlanStatus.DRAFT);
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
         when(planRepository.findByOwnerAndWeekKey(OWNER, WEEK_KEY)).thenReturn(Optional.of(existing));
-        when(commitmentRepository.findByWeeklyPlanId(existing.getId())).thenReturn(List.of());
+        when(commitmentRepository.countByWeeklyPlanId(existing.getId())).thenReturn(0L);
 
         WeeklyPlanDto dto = service().getOrCreateCurrentPlan();
 
@@ -105,7 +101,7 @@ class LifecycleServiceTest {
         UUID id = UUID.randomUUID();
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
         when(planRepository.findById(id)).thenReturn(Optional.of(plan(id, OWNER, PlanStatus.DRAFT)));
-        when(commitmentRepository.findByWeeklyPlanId(id)).thenReturn(List.of(commitment()));
+        when(commitmentRepository.existsByWeeklyPlanId(id)).thenReturn(true);
         when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         WeeklyPlanDto dto = service().lock(id);
@@ -121,7 +117,7 @@ class LifecycleServiceTest {
         UUID id = UUID.randomUUID();
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
         when(planRepository.findById(id)).thenReturn(Optional.of(plan(id, OWNER, PlanStatus.DRAFT)));
-        when(commitmentRepository.findByWeeklyPlanId(id)).thenReturn(List.of());
+        when(commitmentRepository.existsByWeeklyPlanId(id)).thenReturn(false);
         when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         WeeklyPlanDto dto = service().lock(id);
@@ -138,7 +134,6 @@ class LifecycleServiceTest {
         UUID id = UUID.randomUUID();
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
         when(planRepository.findById(id)).thenReturn(Optional.of(plan(id, OWNER, PlanStatus.LOCKED)));
-        when(commitmentRepository.findByWeeklyPlanId(id)).thenReturn(List.of());
         when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         WeeklyPlanDto dto = service().startReconciling(id);
@@ -153,7 +148,6 @@ class LifecycleServiceTest {
         when(principalResolver.currentPrincipal()).thenReturn(OWNER);
         when(planRepository.findById(id))
             .thenReturn(Optional.of(plan(id, OWNER, PlanStatus.RECONCILING)));
-        when(commitmentRepository.findByWeeklyPlanId(id)).thenReturn(List.of());
         when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         WeeklyPlanDto dto = service().submitReconciled(id);

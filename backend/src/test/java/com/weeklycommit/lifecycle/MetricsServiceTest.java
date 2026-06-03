@@ -34,7 +34,9 @@ class MetricsServiceTest {
     PrincipalResolver principalResolver;
 
     private MetricsService service() {
-        return new MetricsService(commitmentRepository, planRepository, principalResolver);
+        OwnedPlanLoader ownedPlanLoader =
+            new OwnedPlanLoader(planRepository, commitmentRepository, principalResolver);
+        return new MetricsService(commitmentRepository, ownedPlanLoader);
     }
 
     private Commitment commitment(boolean planned, ReconciliationStatus status) {

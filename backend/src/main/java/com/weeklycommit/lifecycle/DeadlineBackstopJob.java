@@ -84,7 +84,7 @@ public class DeadlineBackstopJob {
         for (WeeklyPlan plan : overdue) {
             lifecycleService.transition(plan, PlanStatus.LOCKED);
             plan.setLockType(LockType.AUTO_LOCKED);
-            if (commitmentRepository.findByWeeklyPlanId(plan.getId()).isEmpty()) {
+            if (!commitmentRepository.existsByWeeklyPlanId(plan.getId())) {
                 plan.setNoPlan(true);
             }
             planRepository.save(plan);

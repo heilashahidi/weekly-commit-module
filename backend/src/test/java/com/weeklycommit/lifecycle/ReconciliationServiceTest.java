@@ -47,14 +47,17 @@ class ReconciliationServiceTest {
     PrincipalResolver principalResolver;
 
     private ReconciliationService service() {
+        OwnedPlanLoader ownedPlanLoader =
+            new OwnedPlanLoader(planRepository, commitmentRepository, principalResolver);
         LifecycleService lifecycle =
             new LifecycleService(
                 planRepository,
                 commitmentRepository,
                 principalResolver,
+                ownedPlanLoader,
                 new MutableClock(NOW, ZoneOffset.UTC));
         return new ReconciliationService(
-            commitmentRepository, planRepository, principalResolver, lifecycle);
+            commitmentRepository, planRepository, ownedPlanLoader, lifecycle);
     }
 
     private WeeklyPlan plan(UUID id, String owner, PlanStatus status) {

@@ -35,19 +35,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class CommitmentService {
 
     private final CommitmentRepository commitmentRepository;
-    private final WeeklyPlanRepository planRepository;
     private final RcdoNodeRepository rcdoNodeRepository;
-    private final PrincipalResolver principalResolver;
+    private final OwnedPlanLoader ownedPlanLoader;
 
     public CommitmentService(
             CommitmentRepository commitmentRepository,
-            WeeklyPlanRepository planRepository,
             RcdoNodeRepository rcdoNodeRepository,
-            PrincipalResolver principalResolver) {
+            OwnedPlanLoader ownedPlanLoader) {
         this.commitmentRepository = commitmentRepository;
-        this.planRepository = planRepository;
         this.rcdoNodeRepository = rcdoNodeRepository;
-        this.principalResolver = principalResolver;
+        this.ownedPlanLoader = ownedPlanLoader;
     }
 
     /**
@@ -58,7 +55,7 @@ public class CommitmentService {
      */
     @Transactional
     public CommitmentDto create(UUID planId, UUID rcdoNodeId, String title) {
-        WeeklyPlan plan = loadOwnedPlan(planId);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
 
         boolean planned;
         switch (plan.getStatus()) {
@@ -87,8 +84,8 @@ public class CommitmentService {
      */
     @Transactional
     public CommitmentDto edit(UUID commitmentId, UUID rcdoNodeId, String title) {
-        Commitment c = loadCommitment(commitmentId);
-        requireMutable(c, loadOwnedPlan(c.getWeeklyPlanId()));
+        Commitment c = ownedPlanLoader.loadCommitment(commitmentId);
+        requireMutable(c, ownedPlanLoader.loadOwned(c.getWeeklyPlanId()));
         requireValidLink(rcdoNodeId);
 
         c.setRcdoNodeId(rcdoNodeId);
@@ -102,28 +99,9 @@ public class CommitmentService {
      */
     @Transactional
     public void delete(UUID commitmentId) {
-        Commitment c = loadCommitment(commitmentId);
-        requireMutable(c, loadOwnedPlan(c.getWeeklyPlanId()));
+        Commitment c = ownedPlanLoader.loadCommitment(commitmentId);
+        requireMutable(c, ownedPlanLoader.loadOwned(c.getWeeklyPlanId()));
         commitmentRepository.delete(c);
-    }
-
-    /** Loads the commitment, 404 if missing. */
-    private Commitment loadCommitment(UUID commitmentId) {
-        return commitmentRepository.findById(commitmentId)
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Commitment not found"));
-    }
-
-    /** Loads a plan, 404 if missing, 403 if not owned by the current principal. */
-    private WeeklyPlan loadOwnedPlan(UUID planId) {
-        WeeklyPlan plan = planRepository.findById(planId)
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Weekly plan not found"));
-        if (!plan.getOwner().equals(principalResolver.currentPrincipal())) {
-            throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN, "Plan belongs to another principal");
-        }
-        return plan;
     }
 
     /** R6: the link must be present and resolve to an existing RCDO node. */

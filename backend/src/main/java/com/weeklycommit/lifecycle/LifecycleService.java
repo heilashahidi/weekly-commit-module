@@ -68,16 +68,19 @@ public class LifecycleService {
     private final WeeklyPlanRepository planRepository;
     private final CommitmentRepository commitmentRepository;
     private final PrincipalResolver principalResolver;
+    private final OwnedPlanLoader ownedPlanLoader;
     private final Clock clock;
 
     public LifecycleService(
             WeeklyPlanRepository planRepository,
             CommitmentRepository commitmentRepository,
             PrincipalResolver principalResolver,
+            OwnedPlanLoader ownedPlanLoader,
             Clock clock) {
         this.planRepository = planRepository;
         this.commitmentRepository = commitmentRepository;
         this.principalResolver = principalResolver;
+        this.ownedPlanLoader = ownedPlanLoader;
         this.clock = clock;
     }
 
@@ -113,10 +116,10 @@ public class LifecycleService {
      */
     @Transactional
     public WeeklyPlanDto lock(UUID planId) {
-        WeeklyPlan plan = loadOwnedPlan(planId);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
         transition(plan, PlanStatus.LOCKED);
         plan.setLockType(LockType.USER_LOCKED);
-        if (commitmentRepository.findByWeeklyPlanId(plan.getId()).isEmpty()) {
+        if (!commitmentRepository.existsByWeeklyPlanId(plan.getId())) {
             plan.setNoPlan(true);
         }
         return toDto(planRepository.save(plan));
@@ -125,7 +128,7 @@ public class LifecycleService {
     /** Manual {@code LOCKED -> RECONCILING}. */
     @Transactional
     public WeeklyPlanDto startReconciling(UUID planId) {
-        WeeklyPlan plan = loadOwnedPlan(planId);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
         transition(plan, PlanStatus.RECONCILING);
         return toDto(planRepository.save(plan));
     }
@@ -137,7 +140,7 @@ public class LifecycleService {
      */
     @Transactional
     public WeeklyPlanDto submitReconciled(UUID planId) {
-        WeeklyPlan plan = loadOwnedPlan(planId);
+        WeeklyPlan plan = ownedPlanLoader.loadOwned(planId);
         transition(plan, PlanStatus.RECONCILED);
         return toDto(planRepository.save(plan));
     }
@@ -184,23 +187,8 @@ public class LifecycleService {
         };
     }
 
-    /** Loads a plan, 404 if missing, 403 if not owned by the current principal. */
-    private WeeklyPlan loadOwnedPlan(UUID planId) {
-        WeeklyPlan plan =
-            planRepository
-                .findById(planId)
-                .orElseThrow(
-                    () -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Weekly plan not found"));
-        if (!plan.getOwner().equals(principalResolver.currentPrincipal())) {
-            throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN, "Plan belongs to another principal");
-        }
-        return plan;
-    }
-
     private WeeklyPlanDto toDto(WeeklyPlan plan) {
-        long count = commitmentRepository.findByWeeklyPlanId(plan.getId()).size();
+        long count = commitmentRepository.countByWeeklyPlanId(plan.getId());
         return WeeklyPlanDto.from(plan, count);
     }
 }

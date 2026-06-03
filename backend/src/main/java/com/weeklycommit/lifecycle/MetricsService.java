@@ -1,12 +1,9 @@
 package com.weeklycommit.lifecycle;
 
-import com.weeklycommit.config.PrincipalResolver;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Computes the two-axis reconciliation metrics for a weekly plan (U6, R11). Pure
@@ -38,16 +35,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class MetricsService {
 
     private final CommitmentRepository commitmentRepository;
-    private final WeeklyPlanRepository planRepository;
-    private final PrincipalResolver principalResolver;
+    private final OwnedPlanLoader ownedPlanLoader;
 
     public MetricsService(
             CommitmentRepository commitmentRepository,
-            WeeklyPlanRepository planRepository,
-            PrincipalResolver principalResolver) {
+            OwnedPlanLoader ownedPlanLoader) {
         this.commitmentRepository = commitmentRepository;
-        this.planRepository = planRepository;
-        this.principalResolver = principalResolver;
+        this.ownedPlanLoader = ownedPlanLoader;
     }
 
     /**
@@ -56,7 +50,7 @@ public class MetricsService {
      */
     @Transactional(readOnly = true)
     public PlanMetricsDto getMetrics(UUID planId) {
-        loadOwnedPlan(planId);
+        ownedPlanLoader.loadOwned(planId);
         return computeMetrics(planId);
     }
 
@@ -82,17 +76,5 @@ public class MetricsService {
 
         return new PlanMetricsDto(
             planId, plannedCount, unplannedCount, doneCount, accuracy, ratio);
-    }
-
-    /** Loads a plan, 404 if missing, 403 if not owned by the current principal. */
-    private WeeklyPlan loadOwnedPlan(UUID planId) {
-        WeeklyPlan plan = planRepository.findById(planId)
-            .orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Weekly plan not found"));
-        if (!plan.getOwner().equals(principalResolver.currentPrincipal())) {
-            throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN, "Plan belongs to another principal");
-        }
-        return plan;
     }
 }
