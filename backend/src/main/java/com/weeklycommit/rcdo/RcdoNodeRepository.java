@@ -14,5 +14,8 @@ public interface RcdoNodeRepository extends JpaRepository<RcdoNode, UUID> {
     /** Root nodes (the Rally Cries). */
     List<RcdoNode> findByParentIdIsNull();
 
+    /** Direct children of a node (index-backed by idx_rcdo_node_parent_id). */
+    List<RcdoNode> findByParentId(UUID parentId);
+
     List<RcdoNode> findByNodeType(RcdoNodeType nodeType);
 }

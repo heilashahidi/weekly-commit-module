@@ -1,29 +1,9 @@
-import { configureStore } from '@reduxjs/toolkit';
-import { render, screen, waitFor } from '@testing-library/react';
-import { Provider } from 'react-redux';
+import { screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setTokenProvider } from '../auth/tokenProvider';
 import RcdoTree from '../routes/RcdoTree';
-import { api, type RcdoNode } from '../store/api';
-
-function renderWithStore() {
-  const store = configureStore({
-    reducer: { [api.reducerPath]: api.reducer },
-    middleware: (getDefault) => getDefault().concat(api.middleware),
-  });
-  return render(
-    <Provider store={store}>
-      <RcdoTree />
-    </Provider>,
-  );
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+import { type RcdoNode } from '../store/api';
+import { jsonResponse, renderWithStore } from '../test/renderWithStore';
 
 const SAMPLE_TREE: RcdoNode[] = [
   {
@@ -74,7 +54,7 @@ describe('RcdoTree', () => {
       'fetch',
       vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse(SAMPLE_TREE)),
     );
-    renderWithStore();
+    renderWithStore(<RcdoTree />);
     await waitFor(
       () => expect(screen.getByText('Become the category leader')).toBeInTheDocument(),
       { timeout: 3000 },
@@ -88,7 +68,7 @@ describe('RcdoTree', () => {
       'fetch',
       vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse(SAMPLE_TREE)),
     );
-    renderWithStore();
+    renderWithStore(<RcdoTree />);
     // Loading branch is rendered synchronously before the resolved data arrives.
     expect(screen.getByText(/Loading strategy hierarchy/)).toBeInTheDocument();
     await waitFor(
@@ -104,7 +84,7 @@ describe('RcdoTree', () => {
         jsonResponse({ error: 'boom' }, 500),
       ),
     );
-    renderWithStore();
+    renderWithStore(<RcdoTree />);
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument(), { timeout: 3000 });
   });
 
@@ -115,7 +95,7 @@ describe('RcdoTree', () => {
     vi.stubGlobal('fetch', fetchMock);
     setTokenProvider(async () => 'test-token');
 
-    renderWithStore();
+    renderWithStore(<RcdoTree />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled(), { timeout: 3000 });
     const request = fetchMock.mock.calls[0][0] as Request;

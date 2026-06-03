@@ -3,17 +3,14 @@ package com.weeklycommit.rcdo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.weeklycommit.config.PrincipalResolver;
 import com.weeklycommit.support.AbstractPostgresIT;
+import com.weeklycommit.support.TestPrincipalConfig;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,19 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 // without this, rows from one test (e.g. roots) pollute count-sensitive assertions
 // in the next.
 @Transactional
-@Import(RcdoNodeRepositoryTest.TestPrincipalConfig.class)
+@Import(TestPrincipalConfig.class)
 class RcdoNodeRepositoryTest extends AbstractPostgresIT {
 
-    static final String TEST_PRINCIPAL = "rcdo-test-user";
-
-    @TestConfiguration
-    static class TestPrincipalConfig {
-        @Bean
-        @Primary
-        PrincipalResolver testPrincipalResolver() {
-            return () -> TEST_PRINCIPAL;
-        }
-    }
+    static final String TEST_PRINCIPAL = TestPrincipalConfig.TEST_PRINCIPAL;
 
     @Autowired
     RcdoNodeRepository repository;

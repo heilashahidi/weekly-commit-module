@@ -91,8 +91,7 @@ class RcdoServiceTest {
         UUID dobj = UUID.randomUUID();
         when(repository.findById(rally)).thenReturn(java.util.Optional.of(
             node(rally, RcdoNodeType.RALLY_CRY, "RC", null)));
-        when(repository.findAll()).thenReturn(List.of(
-            node(rally, RcdoNodeType.RALLY_CRY, "RC", null),
+        when(repository.findByParentId(rally)).thenReturn(List.of(
             node(dobj, RcdoNodeType.DEFINING_OBJECTIVE, "DO", rally)));
 
         RcdoNodeDto dto = service.getNode(rally).orElseThrow();
