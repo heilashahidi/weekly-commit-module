@@ -8,6 +8,7 @@ import {
 import { problemDetailMessage } from '../../lib/problemDetail';
 import CommitmentRow from '../../components/CommitmentRow';
 import StatusBadge from '../../components/StatusBadge';
+import CarryForwardPanel from './CarryForwardPanel';
 
 interface ModeViewProps {
   plan: WeeklyPlanDto;
@@ -103,10 +104,9 @@ function SummaryCommitment({ commitment }: { commitment: CommitmentDto }) {
  * zero-planned week reads "not applicable", not "0%" (UX-R11/AE-D10). Any
  * `UNRECONCILED` work is shown honestly (distinct orange badge, never "done").
  *
- * CARRY-FORWARD SEAM (U9): the "Carry forward" section below is a placeholder.
- * U9 builds `CarryForwardPanel` and should REPLACE the placeholder <div> inside
- * that <section> with `<CarryForwardPanel planId={plan.id} />` (import it then).
- * Do not import it here — it does not exist yet in this unit.
+ * The carry-forward entry point (U9): the `CarryForwardPanel` below renders its
+ * own "Carry forward" heading, so the wrapping <section> keeps only the divider
+ * to set it apart from the summary above.
  */
 export default function SummaryView({ plan }: ModeViewProps) {
   const {
@@ -155,13 +155,9 @@ export default function SummaryView({ plan }: ModeViewProps) {
             </ul>
           )}
 
-          {/* CARRY-FORWARD SEAM (U9): replace the placeholder div with
-              <CarryForwardPanel planId={plan.id} /> once U9 ships it. */}
+          {/* Carry-forward entry point (U9). The panel owns its own heading. */}
           <section aria-label="Carry forward" className="border-t border-gray-200 pt-4">
-            <h3 className="text-base font-medium text-gray-700">Carry forward</h3>
-            <div data-testid="carry-forward-placeholder" className="text-sm text-gray-500">
-              Carry-forward selection appears here.
-            </div>
+            <CarryForwardPanel planId={plan.id} />
           </section>
         </>
       )}
