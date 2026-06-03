@@ -1,29 +1,8 @@
-import { configureStore } from '@reduxjs/toolkit';
-import { render, screen, waitFor } from '@testing-library/react';
-import { Provider } from 'react-redux';
+import { screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setTokenProvider } from '../auth/tokenProvider';
 import HealthCheck from '../routes/HealthCheck';
-import { api } from '../store/api';
-
-function renderWithStore() {
-  const store = configureStore({
-    reducer: { [api.reducerPath]: api.reducer },
-    middleware: (getDefault) => getDefault().concat(api.middleware),
-  });
-  return render(
-    <Provider store={store}>
-      <HealthCheck />
-    </Provider>,
-  );
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+import { jsonResponse, renderWithStore } from '../test/renderWithStore';
 
 describe('HealthCheck', () => {
   afterEach(() => {
@@ -36,7 +15,7 @@ describe('HealthCheck', () => {
       'fetch',
       vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ status: 'UP' })),
     );
-    renderWithStore();
+    renderWithStore(<HealthCheck />);
     await waitFor(
       () => expect(screen.getByText(/Backend status: UP/)).toBeInTheDocument(),
       { timeout: 3000 },
@@ -50,7 +29,7 @@ describe('HealthCheck', () => {
         jsonResponse({ error: 'boom' }, 500),
       ),
     );
-    renderWithStore();
+    renderWithStore(<HealthCheck />);
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument(), { timeout: 3000 });
   });
 
@@ -61,7 +40,7 @@ describe('HealthCheck', () => {
     vi.stubGlobal('fetch', fetchMock);
     setTokenProvider(async () => 'test-token');
 
-    renderWithStore();
+    renderWithStore(<HealthCheck />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled(), { timeout: 3000 });
     const request = fetchMock.mock.calls[0][0] as Request;

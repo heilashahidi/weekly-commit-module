@@ -4,32 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.weeklycommit.config.PrincipalResolver;
 import com.weeklycommit.support.AbstractPostgresIT;
+import com.weeklycommit.support.TestPrincipalConfig;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 
 /**
  * Verifies Spring Data JPA auditing populates the {@link AbstractAuditingEntity}
  * fields, and that {@code createdBy}/{@code lastModifiedBy} flow from the
  * {@link PrincipalResolver}.
  */
-@Import(AbstractAuditingEntityTest.TestPrincipalConfig.class)
+@Import(TestPrincipalConfig.class)
 class AbstractAuditingEntityTest extends AbstractPostgresIT {
 
-    static final String TEST_PRINCIPAL = "test-user";
-
-    @TestConfiguration
-    static class TestPrincipalConfig {
-        @Bean
-        @Primary
-        PrincipalResolver testPrincipalResolver() {
-            return () -> TEST_PRINCIPAL;
-        }
-    }
+    static final String TEST_PRINCIPAL = TestPrincipalConfig.TEST_PRINCIPAL;
 
     @Autowired
     TestAuditEntityRepository repository;
