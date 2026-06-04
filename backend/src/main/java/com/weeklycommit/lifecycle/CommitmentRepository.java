@@ -1,5 +1,6 @@
 package com.weeklycommit.lifecycle;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,6 +17,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CommitmentRepository extends JpaRepository<Commitment, UUID> {
 
     List<Commitment> findByWeeklyPlanId(UUID weeklyPlanId);
+
+    /** All commitments across several plans in one query — backs the team roll-up (F-U3). */
+    List<Commitment> findByWeeklyPlanIdIn(Collection<UUID> weeklyPlanIds);
 
     List<Commitment> findByWeeklyPlanIdAndPlanned(UUID weeklyPlanId, boolean planned);
 

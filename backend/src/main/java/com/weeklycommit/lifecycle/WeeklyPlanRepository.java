@@ -1,6 +1,7 @@
 package com.weeklycommit.lifecycle;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +17,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface WeeklyPlanRepository extends JpaRepository<WeeklyPlan, UUID> {
 
     Optional<WeeklyPlan> findByOwnerAndWeekKey(String owner, String weekKey);
+
+    /** A set of owners' plans for one week in one query — backs the team roll-up (F-U3). */
+    List<WeeklyPlan> findByOwnerInAndWeekKey(Collection<String> owners, String weekKey);
 
     List<WeeklyPlan> findByStatusAndStatusDeadlineBefore(PlanStatus status, Instant deadline);
 }

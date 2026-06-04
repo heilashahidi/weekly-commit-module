@@ -1,6 +1,7 @@
 package com.weeklycommit.rcdo;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +57,41 @@ public class RcdoService {
             .filter(n -> id.equals(n.getId()))
             .findFirst()
             .map(node -> toDto(node, childrenByParent, new HashSet<>()));
+    }
+
+    /**
+     * Maps each node id to the title of its nearest {@code OUTCOME} ancestor (the node
+     * itself if it is an OUTCOME). Node ids that have no OUTCOME ancestor — those
+     * linked at or above OUTCOME level (RALLY_CRY / DEFINING_OBJECTIVE) — are absent
+     * from the map; the caller buckets those (e.g. as "Other"). Built once from a
+     * single {@link RcdoNodeRepository#findAll()} so the manager-dashboard outcome
+     * spread (F-U3) resolves every commitment without per-node queries. Cycle-guarded.
+     */
+    public Map<UUID, String> outcomeTitlesByNodeId() {
+        List<RcdoNode> all = repository.findAll();
+        Map<UUID, RcdoNode> byId =
+            all.stream().collect(Collectors.toMap(RcdoNode::getId, n -> n));
+        Map<UUID, String> result = new HashMap<>();
+        for (RcdoNode node : all) {
+            String title = outcomeTitleOf(node, byId);
+            if (title != null) {
+                result.put(node.getId(), title);
+            }
+        }
+        return result;
+    }
+
+    /** Walks up by {@code parentId} to the nearest OUTCOME, or null if none; cycle-guarded. */
+    private String outcomeTitleOf(RcdoNode node, Map<UUID, RcdoNode> byId) {
+        Set<UUID> seen = new HashSet<>();
+        RcdoNode current = node;
+        while (current != null && seen.add(current.getId())) {
+            if (current.getNodeType() == RcdoNodeType.OUTCOME) {
+                return current.getTitle();
+            }
+            current = current.getParentId() == null ? null : byId.get(current.getParentId());
+        }
+        return null;
     }
 
     private Map<UUID, List<RcdoNode>> childrenByParent(List<RcdoNode> all) {
