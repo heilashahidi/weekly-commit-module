@@ -79,4 +79,17 @@ describe('ManagerReviewNote', () => {
     renderWithStore(<ManagerReviewNote planId={PLAN_ID} />);
     expect(screen.getByText(/Loading manager review/)).toBeInTheDocument();
   });
+
+  it('surfaces a real fetch error instead of silently rendering nothing', async () => {
+    // A 500 with a ProblemDetail body must NOT look like the 204 "no review"
+    // empty state — the IC needs to know the review failed to load.
+    stubJson({ title: 'Server error', detail: 'review service unavailable' }, 500);
+    renderWithStore(<ManagerReviewNote planId={PLAN_ID} />);
+
+    await waitFor(
+      () => expect(screen.getByText('review service unavailable')).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
 });

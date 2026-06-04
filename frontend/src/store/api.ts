@@ -149,7 +149,11 @@ export const api = createApi({
     }),
     getPlan: builder.query<WeeklyPlanDto, string>({
       query: (id) => `/api/lifecycle/plans/${id}`,
-      providesTags: (_result, _error, id) => [{ type: 'WeeklyPlan' as const, id }],
+      // Provide BOTH the id-scoped tag and the unscoped 'WeeklyPlan' tag: the
+      // lifecycle mutations invalidate the unscoped tag (matching getCurrentPlan),
+      // so without the unscoped entry a plan fetched by id would never refetch
+      // after a lock/transition. The id-scoped tag is kept for future per-id use.
+      providesTags: (_result, _error, id) => [{ type: 'WeeklyPlan' as const, id }, 'WeeklyPlan'],
     }),
     getPlanCommitments: builder.query<CommitmentDto[], string>({
       query: (planId) => `/api/lifecycle/plans/${planId}/commitments`,
@@ -172,8 +176,13 @@ export const api = createApi({
     getManagerReview: builder.query<ManagerReviewDto | null, string>({
       query: (planId) => ({
         url: `/api/lifecycle/plans/${planId}/review`,
-        responseHandler: async (response) =>
-          response.status === 204 ? null : response.json(),
+        // Read text first, then parse: a 204 (no review) AND any empty-body error
+        // response (e.g. a 403/500 with no ProblemDetail body) both yield null
+        // instead of throwing a PARSING_ERROR that would mask the real status.
+        responseHandler: async (response) => {
+          const text = await response.text();
+          return text ? JSON.parse(text) : null;
+        },
       }),
       providesTags: ['ManagerReview'],
     }),
@@ -242,7 +251,9 @@ export const api = createApi({
       invalidatesTags: ['WeeklyPlan', 'Commitment', 'PlanMetrics'],
     }),
     carry: builder.mutation<
-      WeeklyPlanDto,
+      // Backend CarryForwardController.carry returns the seeded next-week
+      // commitments (List<CommitmentDto>), not a plan.
+      CommitmentDto[],
       { planId: string; body: { commitmentIds: string[] } }
     >({
       query: ({ planId, body }) => ({

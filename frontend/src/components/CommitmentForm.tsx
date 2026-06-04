@@ -7,6 +7,7 @@ import {
   type RcdoNode,
 } from '../store/api';
 import { problemDetailMessage } from '../lib/problemDetail';
+import LinkedOutcome from './LinkedOutcome';
 import RcdoPicker from './RcdoPicker';
 
 interface CommitmentFormProps {
@@ -74,12 +75,6 @@ export default function CommitmentForm({
     }
   }
 
-  const selectedLabel = selected
-    ? selected.title
-    : editing
-      ? `Linked outcome ${editing.rcdoNodeId}`
-      : null;
-
   return (
     <div className="space-y-2 rounded border border-gray-200 p-3">
       <label className="block text-sm font-medium text-gray-700" htmlFor={inputId}>
@@ -98,9 +93,15 @@ export default function CommitmentForm({
         <Button type="button" color="light" onClick={() => setPickerOpen(true)}>
           Pick Supporting Outcome
         </Button>
-        {selectedLabel ? (
+        {selected ? (
           <span className="text-sm text-blue-700" data-testid="selected-outcome">
-            {selectedLabel}
+            {selected.title}
+          </span>
+        ) : editing ? (
+          // No re-pick yet: resolve and show the existing linked Outcome's title
+          // (the always-visible RCDO spine, UX-R5) rather than a raw node id.
+          <span data-testid="selected-outcome">
+            <LinkedOutcome rcdoNodeId={editing.rcdoNodeId} />
           </span>
         ) : (
           <span className="text-sm text-gray-400">No Supporting Outcome selected</span>

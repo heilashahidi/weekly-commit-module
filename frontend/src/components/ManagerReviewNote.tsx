@@ -1,5 +1,6 @@
 import { useGetManagerReviewQuery } from '../store/api';
 import { formatTimestamp } from '../lib/formatTimestamp';
+import { problemDetailMessage } from '../lib/problemDetail';
 
 /**
  * Read-only display of a manager's review comment on a plan (UX-R13, AE-D9 display half).
@@ -13,10 +14,20 @@ import { formatTimestamp } from '../lib/formatTimestamp';
  * exposes no edit affordance.
  */
 export default function ManagerReviewNote({ planId }: { planId: string }) {
-  const { data, isLoading } = useGetManagerReviewQuery(planId);
+  const { data, isLoading, isError, error } = useGetManagerReviewQuery(planId);
 
   if (isLoading) {
     return <p className="text-sm text-gray-500">Loading manager review…</p>;
+  }
+
+  // A real fetch failure must not look like "no review" — surface it so the IC
+  // knows the review couldn't load (distinct from the legitimate 204 absence).
+  if (isError) {
+    return (
+      <p role="alert" className="text-sm text-red-600">
+        {problemDetailMessage(error)}
+      </p>
+    );
   }
 
   // No review yet (204 → null) — render nothing.

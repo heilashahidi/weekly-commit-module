@@ -19,12 +19,33 @@ function makePlan(overrides: Partial<WeeklyPlanDto> = {}): WeeklyPlanDto {
   };
 }
 
+/**
+ * Stubs the current-plan GET with `body`/`status`. The shell lazy-loads the real
+ * mode sub-views, which fire their own sub-resource queries — so those must be
+ * branched to valid shapes (empty commitments/candidates, a metrics object, a
+ * 204 no-review) or the sub-view throws and the shell assertion races the throw.
+ */
 function stubFetch(body: unknown, status = 200) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      jsonResponse(body, status),
-    ),
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = (input instanceof Request ? input : new Request(input, init)).url;
+      if (url.includes('/commitments')) return jsonResponse([]);
+      if (url.includes('/carry-candidates')) return jsonResponse([]);
+      if (url.includes('/metrics')) {
+        return jsonResponse({
+          planId: 'plan-1',
+          plannedCount: 0,
+          unplannedCount: 0,
+          doneCount: 0,
+          reconciliationAccuracy: null,
+          plannedVsUnplannedRatio: 0,
+        });
+      }
+      if (url.includes('/review')) return new Response(null, { status: 204 });
+      // getCurrentPlan (and any plan-by-id) — the configured response.
+      return jsonResponse(body, status);
+    }),
   );
 }
 

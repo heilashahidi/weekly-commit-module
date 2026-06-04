@@ -134,7 +134,15 @@ export default function DraftView({ plan }: ModeViewProps) {
           )}
 
           {editing ? (
-            <CommitmentForm planId={plan.id} editing={editing} onDone={handleDone} />
+            // Key by the edited id so switching Edit between rows remounts the
+            // form with fresh state (title/selected seed from useState only on
+            // mount). Without this, editing A then B would save A's title to B.
+            <CommitmentForm
+              key={editing.id}
+              planId={plan.id}
+              editing={editing}
+              onDone={handleDone}
+            />
           ) : adding ? (
             <CommitmentForm planId={plan.id} editing={null} onDone={handleDone} />
           ) : (
