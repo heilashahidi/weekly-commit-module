@@ -1,7 +1,7 @@
 ---
 title: "feat: Manager Dashboard + Team Roll-up (Workstream F)"
 type: feat
-status: active
+status: completed
 date: 2026-06-03
 deepened: 2026-06-03
 origin: docs/brainstorms/manager-dashboard-requirements.md
