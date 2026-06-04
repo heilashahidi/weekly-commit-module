@@ -50,7 +50,7 @@ public class MetricsService {
      */
     @Transactional(readOnly = true)
     public PlanMetricsDto getMetrics(UUID planId) {
-        ownedPlanLoader.loadOwned(planId);
+        ownedPlanLoader.loadOwnedOrManaged(planId);
         return computeMetrics(planId);
     }
 

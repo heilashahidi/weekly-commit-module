@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.weeklycommit.config.PrincipalResolver;
+import com.weeklycommit.manager.ReportingRepository;
 import com.weeklycommit.rcdo.RcdoNode;
 import com.weeklycommit.rcdo.RcdoNodeRepository;
 import com.weeklycommit.rcdo.RcdoNodeType;
@@ -45,12 +46,16 @@ class CommitmentServiceTest {
     @Mock
     PrincipalResolver principalResolver;
 
+    @Mock
+    ReportingRepository reportingRepository;
+
     CommitmentService service;
 
     @BeforeEach
     void setUp() {
         OwnedPlanLoader ownedPlanLoader =
-            new OwnedPlanLoader(planRepository, commitmentRepository, principalResolver);
+            new OwnedPlanLoader(
+                planRepository, commitmentRepository, reportingRepository, principalResolver);
         service = new CommitmentService(commitmentRepository, rcdoNodeRepository, ownedPlanLoader);
     }
 

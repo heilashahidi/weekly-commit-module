@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.weeklycommit.config.PrincipalResolver;
 import com.weeklycommit.lifecycle.support.MutableClock;
+import com.weeklycommit.manager.ReportingRepository;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -46,9 +47,13 @@ class ReconciliationServiceTest {
     @Mock
     PrincipalResolver principalResolver;
 
+    @Mock
+    ReportingRepository reportingRepository;
+
     private ReconciliationService service() {
         OwnedPlanLoader ownedPlanLoader =
-            new OwnedPlanLoader(planRepository, commitmentRepository, principalResolver);
+            new OwnedPlanLoader(
+                planRepository, commitmentRepository, reportingRepository, principalResolver);
         LifecycleService lifecycle =
             new LifecycleService(
                 planRepository,

@@ -119,7 +119,7 @@ public class LifecycleService {
      */
     @Transactional(readOnly = true)
     public WeeklyPlanDto getPlan(UUID planId) {
-        return toDto(ownedPlanLoader.loadOwned(planId));
+        return toDto(ownedPlanLoader.loadOwnedOrManaged(planId));
     }
 
     /**
@@ -129,7 +129,7 @@ public class LifecycleService {
      */
     @Transactional(readOnly = true)
     public List<CommitmentDto> listCommitments(UUID planId) {
-        ownedPlanLoader.loadOwned(planId);
+        ownedPlanLoader.loadOwnedOrManaged(planId);
         return commitmentRepository.findByWeeklyPlanId(planId).stream()
             .map(CommitmentDto::from)
             .toList();

@@ -22,26 +22,28 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * HTTP-level coverage for the non-blocking manager-review overlay (U9, R16/R17) over
- * the secure filter chain and real embedded Postgres.
+ * HTTP-level coverage for the non-blocking manager-review overlay (R16/R17) plus the
+ * workstream-F manager-scoped authorization over the secure filter chain and real
+ * embedded Postgres.
  *
- * <p><b>Covers AE8.</b> {@link #lockedPlanWithNoReviewStillAdvancesToReconciling()}
- * drives a LOCKED plan that has NO manager review through LOCKED -&gt; RECONCILING via
- * the lifecycle endpoint and asserts it succeeds — proving the transition is
- * independent of review state (R17). Other tests assert: a PUT persists
- * reviewer+comment+timestamp; adding a review at LOCKED does not mutate the plan or
- * its commitments (overlay-only, R16 + Outstanding Question (c)); the upsert is
- * one-review-per-plan; review absence is valid throughout; and no JWT -&gt; 401.
+ * <p>Plans here are owned by a seeded <i>report</i> ({@code auth0|report-ava}); the
+ * acting reviewer is that report's seeded <i>manager</i> ({@code auth0|manager-mary},
+ * from V7). The real {@code JwtPrincipalResolver} is active (no
+ * {@code TestPrincipalConfig}), so the acting principal is the JWT subject selected
+ * via {@link TestSecurityConfig#bearerFor(String)}.
  *
- * <p>Principal source: like {@code LifecycleControllerTest}, this IT does not import
- * {@code TestPrincipalConfig}, so the real {@code JwtPrincipalResolver} is active and
- * {@code currentPrincipal()} returns the JWT subject {@code auth0|test-user}.
+ * <p><b>Covers AE2.</b> {@link #managerReviewSucceedsAndStampsManager()},
+ * {@link #ownerSelfReviewForbidden()}, and {@link #nonManagerReviewForbidden()} prove
+ * the write is restricted to the owner's manager. The transition-independence case
+ * (R17) and the upsert/absence/read-scope/length/auth cases round out the surface.
  */
 @AutoConfigureMockMvc
 @Transactional
 class ManagerReviewControllerTest extends AbstractPostgresIT {
 
-    private static final String OWNER = TestSecurityConfig.TEST_SUBJECT;
+    private static final String OWNER = TestSecurityConfig.REPORT_SUBJECT;
+    private static final String MANAGER = TestSecurityConfig.MANAGER_SUBJECT;
+    private static final String OUTSIDER = TestSecurityConfig.OUTSIDER_SUBJECT;
     private static final String SEEDED_RCDO_NODE_ID = "44444444-4444-4444-4444-444444444441";
 
     @Autowired
@@ -66,8 +68,12 @@ class ManagerReviewControllerTest extends AbstractPostgresIT {
         planRepository.deleteAllInBatch();
     }
 
-    private String bearer() {
-        return "Bearer " + TestSecurityConfig.VALID_TOKEN;
+    private String managerBearer() {
+        return TestSecurityConfig.bearerFor(MANAGER);
+    }
+
+    private String ownerBearer() {
+        return TestSecurityConfig.bearerFor(OWNER);
     }
 
     private WeeklyPlan savedPlan(PlanStatus status) {
@@ -92,49 +98,71 @@ class ManagerReviewControllerTest extends AbstractPostgresIT {
             new ManagerReviewController.ReviewRequest(comment));
     }
 
-    // --- AE8: transition is independent of review state ---
+    // --- R17: transition is independent of review state (owner advances own plan) ---
 
     @Test
     void lockedPlanWithNoReviewStillAdvancesToReconciling() throws Exception {
         WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
-
-        // Precondition: no review exists for this plan.
         assertThat(reviewRepository.findByWeeklyPlanId(plan.getId())).isEmpty();
 
-        // The lifecycle transition succeeds with no review present (R17).
         mockMvc.perform(
                 post("/api/lifecycle/plans/" + plan.getId() + "/transitions/start-reconciling")
-                    .header(HttpHeaders.AUTHORIZATION, bearer()))
+                    .header(HttpHeaders.AUTHORIZATION, ownerBearer()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("RECONCILING"));
 
         assertThat(planRepository.findById(plan.getId()).orElseThrow().getStatus())
             .isEqualTo(PlanStatus.RECONCILING);
-        // Still no review — the transition never created or required one.
         assertThat(reviewRepository.findByWeeklyPlanId(plan.getId())).isEmpty();
     }
 
-    // --- PUT persists reviewer + comment + timestamp ---
+    // --- AE2: write restricted to the owner's manager ---
 
     @Test
-    void putReviewPersistsReviewerCommentAndTimestamp() throws Exception {
+    void managerReviewSucceedsAndStampsManager() throws Exception {
         WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
 
         mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
-                .header(HttpHeaders.AUTHORIZATION, bearer())
+                .header(HttpHeaders.AUTHORIZATION, managerBearer())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(reviewBody("Strong week")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.weeklyPlanId").value(plan.getId().toString()))
-            .andExpect(jsonPath("$.reviewer").value(OWNER))
+            .andExpect(jsonPath("$.reviewer").value(MANAGER))
             .andExpect(jsonPath("$.comment").value("Strong week"))
             .andExpect(jsonPath("$.reviewedAt").isNotEmpty());
 
         ManagerReview persisted =
             reviewRepository.findByWeeklyPlanId(plan.getId()).orElseThrow();
-        assertThat(persisted.getReviewer()).isEqualTo(OWNER);
+        assertThat(persisted.getReviewer()).isEqualTo(MANAGER);
         assertThat(persisted.getComment()).isEqualTo("Strong week");
         assertThat(persisted.getCreatedDate()).isNotNull();
+    }
+
+    @Test
+    void ownerSelfReviewForbidden() throws Exception {
+        WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
+
+        mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
+                .header(HttpHeaders.AUTHORIZATION, ownerBearer())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(reviewBody("reviewing myself")))
+            .andExpect(status().isForbidden());
+
+        assertThat(reviewRepository.findByWeeklyPlanId(plan.getId())).isEmpty();
+    }
+
+    @Test
+    void nonManagerReviewForbidden() throws Exception {
+        WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
+
+        mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
+                .header(HttpHeaders.AUTHORIZATION, TestSecurityConfig.bearerFor(OUTSIDER))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(reviewBody("not my report")))
+            .andExpect(status().isForbidden());
+
+        assertThat(reviewRepository.findByWeeklyPlanId(plan.getId())).isEmpty();
     }
 
     // --- review at LOCKED does not mutate the plan or its commitments (R16, Q(c)) ---
@@ -145,7 +173,7 @@ class ManagerReviewControllerTest extends AbstractPostgresIT {
         Commitment commitment = savedCommitment(plan.getId());
 
         mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
-                .header(HttpHeaders.AUTHORIZATION, bearer())
+                .header(HttpHeaders.AUTHORIZATION, managerBearer())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(reviewBody("Reviewed at lock")))
             .andExpect(status().isOk());
@@ -169,7 +197,7 @@ class ManagerReviewControllerTest extends AbstractPostgresIT {
         WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
 
         String first = mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
-                .header(HttpHeaders.AUTHORIZATION, bearer())
+                .header(HttpHeaders.AUTHORIZATION, managerBearer())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(reviewBody("first")))
             .andExpect(status().isOk())
@@ -177,7 +205,7 @@ class ManagerReviewControllerTest extends AbstractPostgresIT {
         String firstId = objectMapper.readTree(first).get("id").asText();
 
         mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
-                .header(HttpHeaders.AUTHORIZATION, bearer())
+                .header(HttpHeaders.AUTHORIZATION, managerBearer())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(reviewBody("second")))
             .andExpect(status().isOk())
@@ -187,30 +215,56 @@ class ManagerReviewControllerTest extends AbstractPostgresIT {
         assertThat(reviewRepository.count()).isEqualTo(1L);
     }
 
-    // --- review absence is a valid state (GET -> 204) ---
+    // --- comment length bound ---
+
+    @Test
+    void tooLongCommentRejected() throws Exception {
+        WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
+        String tooLong = "x".repeat(ManagerReviewService.MAX_COMMENT_LENGTH + 1);
+
+        mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
+                .header(HttpHeaders.AUTHORIZATION, managerBearer())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(reviewBody(tooLong)))
+            .andExpect(status().isBadRequest());
+    }
+
+    // --- read scope: owner or manager 200; unrelated 403; absence 204 ---
 
     @Test
     void getReviewWhenNoneExistsReturnsNoContent() throws Exception {
         WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
 
         mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId() + "/review")
-                .header(HttpHeaders.AUTHORIZATION, bearer()))
+                .header(HttpHeaders.AUTHORIZATION, managerBearer()))
             .andExpect(status().isNoContent());
     }
 
     @Test
-    void getReviewReturnsTheReviewWhenPresent() throws Exception {
+    void managerAndOwnerCanReadReviewUnrelatedCannot() throws Exception {
         WeeklyPlan plan = savedPlan(PlanStatus.LOCKED);
         mockMvc.perform(put("/api/lifecycle/plans/" + plan.getId() + "/review")
-                .header(HttpHeaders.AUTHORIZATION, bearer())
+                .header(HttpHeaders.AUTHORIZATION, managerBearer())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(reviewBody("hello")))
             .andExpect(status().isOk());
 
+        // Manager reads.
         mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId() + "/review")
-                .header(HttpHeaders.AUTHORIZATION, bearer()))
+                .header(HttpHeaders.AUTHORIZATION, managerBearer()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.comment").value("hello"));
+
+        // Owner (the IC) reads their own review.
+        mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId() + "/review")
+                .header(HttpHeaders.AUTHORIZATION, ownerBearer()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.comment").value("hello"));
+
+        // An unrelated principal cannot.
+        mockMvc.perform(get("/api/lifecycle/plans/" + plan.getId() + "/review")
+                .header(HttpHeaders.AUTHORIZATION, TestSecurityConfig.bearerFor(OUTSIDER)))
+            .andExpect(status().isForbidden());
     }
 
     // --- auth ---

@@ -1,6 +1,7 @@
 package com.weeklycommit.lifecycle;
 
 import com.weeklycommit.config.PrincipalResolver;
+import com.weeklycommit.manager.ReportingRepository;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -26,23 +27,29 @@ import org.springframework.web.server.ResponseStatusException;
  *       in the required status, used by the reconciliation and carry-forward guards.
  * </ul>
  *
- * <p>This does <em>not</em> cover {@code ManagerReviewService}, which uses an
- * existence-only check ({@code existsById}, no ownership) because any principal may
- * review any plan.
+ * <p><b>Manager scope (workstream F).</b> {@link #loadOwnedOrManaged(UUID)} widens
+ * read access to "owner OR the owner's manager" for the manager-facing read paths
+ * (plan, commitments, metrics). The owner-only {@link #loadOwned(UUID)} still backs
+ * every write/transition path, so a manager can read a report's plan but never
+ * mutate it. {@code ManagerReviewService} enforces its own manager-of-owner rule for
+ * the review write (the owner may not self-review).
  */
 @Component
 public class OwnedPlanLoader {
 
     private final WeeklyPlanRepository planRepository;
     private final CommitmentRepository commitmentRepository;
+    private final ReportingRepository reportingRepository;
     private final PrincipalResolver principalResolver;
 
     public OwnedPlanLoader(
             WeeklyPlanRepository planRepository,
             CommitmentRepository commitmentRepository,
+            ReportingRepository reportingRepository,
             PrincipalResolver principalResolver) {
         this.planRepository = planRepository;
         this.commitmentRepository = commitmentRepository;
+        this.reportingRepository = reportingRepository;
         this.principalResolver = principalResolver;
     }
 
@@ -52,6 +59,27 @@ public class OwnedPlanLoader {
             .orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Weekly plan not found"));
         if (!plan.getOwner().equals(principalResolver.currentPrincipal())) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN, "Plan belongs to another principal");
+        }
+        return plan;
+    }
+
+    /**
+     * Loads a plan for a manager-facing read: 404 if missing, 403 unless the current
+     * principal is the owner OR the owner's direct manager (per the seeded reporting
+     * mapping). Used by the read paths a manager must reach (plan, commitments,
+     * metrics); write/transition paths keep {@link #loadOwned(UUID)}.
+     */
+    public WeeklyPlan loadOwnedOrManaged(UUID planId) {
+        WeeklyPlan plan = planRepository.findById(planId)
+            .orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Weekly plan not found"));
+        String principal = principalResolver.currentPrincipal();
+        boolean owner = plan.getOwner().equals(principal);
+        boolean manager =
+            reportingRepository.existsByManagerSubAndReportSub(principal, plan.getOwner());
+        if (!owner && !manager) {
             throw new ResponseStatusException(
                 HttpStatus.FORBIDDEN, "Plan belongs to another principal");
         }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.weeklycommit.config.PrincipalResolver;
+import com.weeklycommit.manager.ReportingRepository;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -33,9 +34,13 @@ class MetricsServiceTest {
     @Mock
     PrincipalResolver principalResolver;
 
+    @Mock
+    ReportingRepository reportingRepository;
+
     private MetricsService service() {
         OwnedPlanLoader ownedPlanLoader =
-            new OwnedPlanLoader(planRepository, commitmentRepository, principalResolver);
+            new OwnedPlanLoader(
+                planRepository, commitmentRepository, reportingRepository, principalResolver);
         return new MetricsService(commitmentRepository, ownedPlanLoader);
     }
 

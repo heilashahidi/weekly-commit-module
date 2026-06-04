@@ -144,6 +144,38 @@ class LifecycleControllerTest extends AbstractPostgresIT {
             .andExpect(status().isUnauthorized());
     }
 
+    // --- manager scope (workstream F): a manager may read a report's plan/commitments ---
+
+    @Test
+    void managerReadsReportPlanAndCommitments() throws Exception {
+        // Plan owned by a seeded report; the seeded manager (V7) reads it.
+        WeeklyPlan reportPlan = savedPlan(TestSecurityConfig.REPORT_SUBJECT, PlanStatus.LOCKED);
+        savedCommitment(reportPlan.getId());
+        String managerBearer = TestSecurityConfig.bearerFor(TestSecurityConfig.MANAGER_SUBJECT);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + reportPlan.getId())
+                .header(HttpHeaders.AUTHORIZATION, managerBearer))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.owner").value(TestSecurityConfig.REPORT_SUBJECT));
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + reportPlan.getId() + "/commitments")
+                .header(HttpHeaders.AUTHORIZATION, managerBearer))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void managerCannotTransitionReportPlan() throws Exception {
+        // Reads widen to the manager, but writes/transitions stay owner-only.
+        WeeklyPlan reportPlan = savedPlan(TestSecurityConfig.REPORT_SUBJECT, PlanStatus.DRAFT);
+
+        mockMvc.perform(post("/api/lifecycle/plans/" + reportPlan.getId() + "/transitions/lock")
+                .header(
+                    HttpHeaders.AUTHORIZATION,
+                    TestSecurityConfig.bearerFor(TestSecurityConfig.MANAGER_SUBJECT)))
+            .andExpect(status().isForbidden());
+    }
+
     // --- list plan commitments (U1, UX-R18) ---
 
     @Test
