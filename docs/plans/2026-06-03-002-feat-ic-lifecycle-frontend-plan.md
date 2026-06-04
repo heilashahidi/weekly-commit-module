@@ -1,7 +1,7 @@
 ---
 title: "feat: IC lifecycle frontend (adaptive My Week)"
 type: feat
-status: active
+status: completed
 date: 2026-06-03
 depth: deep
 workstream: D
