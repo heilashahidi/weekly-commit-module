@@ -12,6 +12,9 @@ export default defineConfig({
       filename: 'remoteEntry.js',
       exposes: {
         './WeeklyCommitApp': './src/WeeklyCommitApp.tsx',
+        // Workstream F: the manager dashboard is a second exposed module in the same
+        // remote bundle (shares the React/RTK singletons below), not a separate remote.
+        './ManagerDashboardApp': './src/ManagerDashboardApp.tsx',
       },
       // Object form with singleton:true is mandatory for anything stateful.
       // The array form lets host and remote each load their own copy: two

@@ -117,6 +117,8 @@ export interface OutcomeCountDto {
 export interface TeamRowDto {
   reportSub: string;
   displayName: string;
+  /** The report's current-week plan id, or `null` when they have no plan yet. */
+  planId: string | null;
   status: PlanStatus | null;
   outcomeSpread: OutcomeCountDto[];
   reviewExists: boolean;

@@ -119,13 +119,14 @@ public class ManagerDashboardService {
         WeeklyPlan plan = planByOwner.get(edge.getReportSub());
         if (plan == null) {
             return new TeamRowDto(
-                edge.getReportSub(), edge.getReportDisplayName(), null, List.of(), false);
+                edge.getReportSub(), edge.getReportDisplayName(), null, null, List.of(), false);
         }
         List<OutcomeCountDto> spread =
             outcomeSpread(commitmentsByPlan.getOrDefault(plan.getId(), List.of()), outcomeTitles);
         return new TeamRowDto(
             edge.getReportSub(),
             edge.getReportDisplayName(),
+            plan.getId(),
             plan.getStatus(),
             spread,
             reviewedPlanIds.contains(plan.getId()));

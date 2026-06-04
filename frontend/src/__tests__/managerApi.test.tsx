@@ -15,6 +15,7 @@ const BOARD: PageDto<TeamRowDto> = {
     {
       reportSub: 'auth0|report-ava',
       displayName: 'Ava Stone',
+      planId: 'plan-1',
       status: 'LOCKED',
       outcomeSpread: [{ outcome: 'Increase ARR by 20%', count: 2 }],
       reviewExists: false,
@@ -22,6 +23,7 @@ const BOARD: PageDto<TeamRowDto> = {
     {
       reportSub: 'auth0|report-dan',
       displayName: 'Dan Ruiz',
+      planId: null,
       status: null,
       outcomeSpread: [],
       reviewExists: false,

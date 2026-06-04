@@ -142,6 +142,7 @@ class ManagerDashboardControllerTest extends AbstractPostgresIT {
 
         JsonNode avaRow = rowFor(board, AVA);
         assertThat(avaRow.get("status").asText()).isEqualTo("LOCKED");
+        assertThat(avaRow.get("planId").asText()).isEqualTo(ava.getId().toString());
         assertThat(avaRow.get("displayName").asText()).isEqualTo("Ava Stone");
         assertThat(avaRow.get("reviewExists").asBoolean()).isTrue();
         // Spread sorted by count desc: ARR (2) before NPS (1).
@@ -160,8 +161,9 @@ class ManagerDashboardControllerTest extends AbstractPostgresIT {
         assertThat(cleoRow.get("status").asText()).isEqualTo("RECONCILED");
         assertThat(cleoRow.get("outcomeSpread")).isEmpty();
 
-        // AE3: Dan has no current-week plan -> null status, empty spread.
+        // AE3: Dan has no current-week plan -> null planId + status, empty spread.
         JsonNode danRow = rowFor(board, DAN);
+        assertThat(danRow.get("planId").isNull()).isTrue();
         assertThat(danRow.get("status").isNull()).isTrue();
         assertThat(danRow.get("outcomeSpread")).isEmpty();
         assertThat(danRow.get("reviewExists").asBoolean()).isFalse();
