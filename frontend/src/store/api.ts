@@ -99,6 +99,38 @@ export interface ManagerReviewDto {
   reviewedAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Manager dashboard types (workstream F — mirror backend manager.* DTOs).
+// ---------------------------------------------------------------------------
+
+/** One outcome-spread chip: an RCDO Outcome title (or "Other") and its count. */
+export interface OutcomeCountDto {
+  outcome: string;
+  count: number;
+}
+
+/**
+ * One row of the manager's current-week team board. `status` is `null` when the
+ * report has no current-week plan yet — a first-class "no plan" signal, NOT a
+ * `PlanStatus` value (so it is never fed to the status-style map).
+ */
+export interface TeamRowDto {
+  reportSub: string;
+  displayName: string;
+  status: PlanStatus | null;
+  outcomeSpread: OutcomeCountDto[];
+  reviewExists: boolean;
+}
+
+/** Mirrors backend PageDto — content plus the metadata a client needs to page. */
+export interface PageDto<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 /**
  * Project-wide RTK Query base slice. The only cross-cutting concern wired in the
  * base query is in-memory bearer-token injection. Feature endpoints declare their
@@ -114,6 +146,7 @@ export const api = createApi({
     'CarryCandidate',
     'ManagerReview',
     'PlanMetrics',
+    'TeamWeek',
   ],
   baseQuery: fetchBaseQuery({
     baseUrl: API_BASE_URL,
@@ -185,6 +218,23 @@ export const api = createApi({
         },
       }),
       providesTags: ['ManagerReview'],
+    }),
+
+    // -- Manager dashboard (workstream F) --
+
+    /**
+     * The manager's current-week team board, paginated over their direct reports.
+     * Defaults to the first page at a large size — v1 teams are small, so the board
+     * renders a single page with no paging controls (a report beyond `size` would be
+     * omitted; revisit with the deferred trends work).
+     */
+    getTeamWeek: builder.query<PageDto<TeamRowDto>, { page?: number; size?: number } | void>({
+      query: (arg) => {
+        const page = arg?.page ?? 0;
+        const size = arg?.size ?? 50;
+        return `/api/manager/team?page=${page}&size=${size}&sort=displayName,asc`;
+      },
+      providesTags: ['TeamWeek'],
     }),
 
     // -- Lifecycle mutations (invalidatesTags refetch the affected queries) --
@@ -263,6 +313,23 @@ export const api = createApi({
       }),
       invalidatesTags: ['WeeklyPlan', 'Commitment', 'CarryCandidate'],
     }),
+
+    /**
+     * Manager writes (creates or updates) the single non-blocking review for a plan
+     * (workstream F). Invalidates the review (so the detail view refreshes) and the
+     * team board (so the review-done flag updates).
+     */
+    upsertManagerReview: builder.mutation<
+      ManagerReviewDto,
+      { planId: string; comment: string }
+    >({
+      query: ({ planId, comment }) => ({
+        url: `/api/lifecycle/plans/${planId}/review`,
+        method: 'PUT',
+        body: { comment },
+      }),
+      invalidatesTags: ['ManagerReview', 'TeamWeek'],
+    }),
   }),
 });
 
@@ -276,6 +343,8 @@ export const {
   useGetPlanMetricsQuery,
   useGetCarryCandidatesQuery,
   useGetManagerReviewQuery,
+  useGetTeamWeekQuery,
+  useUpsertManagerReviewMutation,
   useCreateCommitmentMutation,
   useUpdateCommitmentMutation,
   useDeleteCommitmentMutation,
