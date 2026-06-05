@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -76,7 +77,7 @@ class ManagerReviewServiceTest {
         when(principalResolver.currentPrincipal()).thenReturn(MANAGER);
         when(reportingRepository.existsByManagerSubAndReportSub(MANAGER, OWNER)).thenReturn(true);
         when(reviewRepository.findByWeeklyPlanId(planId)).thenReturn(Optional.empty());
-        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reviewRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ManagerReviewDto dto = service.upsertReview(planId, "Looks good");
 
@@ -85,7 +86,7 @@ class ManagerReviewServiceTest {
         assertThat(dto.comment()).isEqualTo("Looks good");
 
         ArgumentCaptor<ManagerReview> saved = ArgumentCaptor.forClass(ManagerReview.class);
-        verify(reviewRepository).save(saved.capture());
+        verify(reviewRepository).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getWeeklyPlanId()).isEqualTo(planId);
         assertThat(saved.getValue().getReviewer()).isEqualTo(MANAGER);
     }
@@ -98,7 +99,7 @@ class ManagerReviewServiceTest {
         when(principalResolver.currentPrincipal()).thenReturn(MANAGER);
         when(reportingRepository.existsByManagerSubAndReportSub(MANAGER, OWNER)).thenReturn(true);
         when(reviewRepository.findByWeeklyPlanId(planId)).thenReturn(Optional.of(existing));
-        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reviewRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ManagerReviewDto dto = service.upsertReview(planId, "updated comment");
 
@@ -107,7 +108,7 @@ class ManagerReviewServiceTest {
         assertThat(dto.reviewer()).isEqualTo(MANAGER);
 
         ArgumentCaptor<ManagerReview> saved = ArgumentCaptor.forClass(ManagerReview.class);
-        verify(reviewRepository).save(saved.capture());
+        verify(reviewRepository).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getId()).isEqualTo(existing.getId());
     }
 
@@ -121,7 +122,7 @@ class ManagerReviewServiceTest {
             .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND));
 
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -136,7 +137,7 @@ class ManagerReviewServiceTest {
             .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN));
 
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -151,7 +152,7 @@ class ManagerReviewServiceTest {
             .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN));
 
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -168,7 +169,23 @@ class ManagerReviewServiceTest {
             .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST));
 
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void concurrentInsertRaceMappedToConflict() {
+        UUID planId = UUID.randomUUID();
+        when(planRepository.findById(planId)).thenReturn(Optional.of(planOwnedBy(planId, OWNER)));
+        when(principalResolver.currentPrincipal()).thenReturn(MANAGER);
+        when(reportingRepository.existsByManagerSubAndReportSub(MANAGER, OWNER)).thenReturn(true);
+        when(reviewRepository.findByWeeklyPlanId(planId)).thenReturn(Optional.empty());
+        when(reviewRepository.saveAndFlush(any()))
+            .thenThrow(new DataIntegrityViolationException("duplicate review"));
+
+        assertThatThrownBy(() -> service.upsertReview(planId, "raced"))
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT));
     }
 
     // --- read: owner or manager ---

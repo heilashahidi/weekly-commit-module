@@ -9,6 +9,8 @@ import com.weeklycommit.lifecycle.WeeklyPlanRepository;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -31,6 +33,8 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("dev")
 public class DemoDataSeeder implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
 
     private static final String DEMO_MANAGER = "auth0|manager-mary";
 
@@ -64,9 +68,16 @@ public class DemoDataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) {
         String weekKey = WeekKey.current(clock);
-        List<ReportingEdge> reports = reportingRepository.findByManagerSub(DEMO_MANAGER);
+        // Deterministic order so the i-th report maps to the i-th demo shape on every boot.
+        List<ReportingEdge> reports =
+            reportingRepository.findByManagerSubOrderByReportSubAsc(DEMO_MANAGER);
         for (int i = 0; i < reports.size() && i < DEMO_PLANS.size(); i++) {
-            seedPlan(reports.get(i).getReportSub(), weekKey, DEMO_PLANS.get(i));
+            // Dev-only demo data: one bad report must not abort application startup.
+            try {
+                seedPlan(reports.get(i).getReportSub(), weekKey, DEMO_PLANS.get(i));
+            } catch (RuntimeException e) {
+                log.warn("Demo seeding skipped for {}: {}", reports.get(i).getReportSub(), e.toString());
+            }
         }
     }
 

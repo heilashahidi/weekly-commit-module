@@ -40,7 +40,7 @@ class ReportingMigrationTest extends AbstractPostgresIT {
 
     @Test
     void seededManagerResolvesReportsWithDisplayNames() {
-        var reports = repository.findByManagerSub(MANAGER);
+        var reports = repository.findByManagerSubOrderByReportSubAsc(MANAGER);
 
         assertThat(reports).hasSize(4);
         assertThat(reports)

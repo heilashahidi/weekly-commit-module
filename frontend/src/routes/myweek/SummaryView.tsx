@@ -6,24 +6,13 @@ import {
   type WeeklyPlanDto,
 } from '../../store/api';
 import { problemDetailMessage } from '../../lib/problemDetail';
+import { formatAccuracy } from '../../lib/metricsFormat';
 import CommitmentRow from '../../components/CommitmentRow';
 import StatusBadge from '../../components/StatusBadge';
 import CarryForwardPanel from './CarryForwardPanel';
 
 interface ModeViewProps {
   plan: WeeklyPlanDto;
-}
-
-/**
- * Formats `reconciliationAccuracy` honoring the PlanMetricsDto null convention:
- * `null` (zero planned) is "not applicable" and must NOT read as `0%`
- * (UX-R11/AE-D10). A non-null value is a 0..1 fraction rendered as a percentage.
- */
-function formatAccuracy(accuracy: number | null): string {
-  if (accuracy === null) {
-    return 'N/A (not applicable)';
-  }
-  return `${Math.round(accuracy * 100)}%`;
 }
 
 /**

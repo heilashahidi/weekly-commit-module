@@ -22,6 +22,9 @@ public interface ReportingRepository extends JpaRepository<ReportingEdge, UUID> 
     /** A manager's direct reports, paginated, for the team roll-up. */
     Page<ReportingEdge> findByManagerSub(String managerSub, Pageable pageable);
 
-    /** A manager's direct reports (unpaged) — used by the dev demo seeder. */
-    List<ReportingEdge> findByManagerSub(String managerSub);
+    /**
+     * A manager's direct reports (unpaged), deterministically ordered — used by the dev
+     * demo seeder, whose per-report demo shape is assigned by position.
+     */
+    List<ReportingEdge> findByManagerSubOrderByReportSubAsc(String managerSub);
 }

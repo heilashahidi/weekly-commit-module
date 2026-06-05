@@ -52,7 +52,7 @@ class DemoDataSeederTest extends AbstractPostgresIT {
     void seedsCurrentWeekPlansSpanningBothOutcomesAndLeavesLastReportPlanless() {
         seeder.run();
 
-        List<ReportingEdge> reports = reportingRepository.findByManagerSub(MANAGER);
+        List<ReportingEdge> reports = reportingRepository.findByManagerSubOrderByReportSubAsc(MANAGER);
         assertThat(reports).hasSizeGreaterThanOrEqualTo(4); // V7 seeds ava/ben/cleo/dan
 
         // The first three reports get current-week plans...

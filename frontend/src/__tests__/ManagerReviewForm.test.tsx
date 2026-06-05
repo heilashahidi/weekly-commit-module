@@ -52,6 +52,36 @@ describe('ManagerReviewForm', () => {
     expect((putCall![0] as Request).url).toContain('/api/lifecycle/plans/plan-1/review');
   });
 
+  it('disables the button and shows Saving… while the write is in flight', async () => {
+    let resolveFetch!: (r: Response) => void;
+    const pending = new Promise<Response>((res) => {
+      resolveFetch = res;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_i: RequestInfo | URL, _n?: RequestInit) => pending),
+    );
+    renderWithStore(<ManagerReviewForm planId="plan-1" />);
+
+    fireEvent.change(screen.getByLabelText('Write a review'), { target: { value: 'note' } });
+    fireEvent.click(screen.getByRole('button', { name: /save review/i }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled(), {
+      timeout: 3000,
+    });
+
+    // Let the write complete so the success state shows and no promise dangles.
+    resolveFetch(
+      new Response(JSON.stringify(REVIEW), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Review saved'), {
+      timeout: 3000,
+    });
+  });
+
   it('shows a problem-detail error on 403 and preserves the typed text', async () => {
     const fetchMock = vi.fn(
       async (_i: RequestInfo | URL, _n?: RequestInit) =>

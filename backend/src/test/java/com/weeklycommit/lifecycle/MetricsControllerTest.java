@@ -125,4 +125,20 @@ class MetricsControllerTest extends AbstractPostgresIT {
                 .header(HttpHeaders.AUTHORIZATION, bearer()))
             .andExpect(status().isForbidden());
     }
+
+    // Workstream F: getMetrics widened to owner-OR-manager-of-owner. A manager reading a
+    // seeded report's metrics gets 200; an unrelated principal still 403 (covered above).
+    @Test
+    void metricsForReportPlanReadableByManager() throws Exception {
+        WeeklyPlan reportPlan = savedPlan(TestSecurityConfig.REPORT_SUBJECT);
+        savedCommitment(reportPlan.getId(), true, ReconciliationStatus.DONE);
+
+        mockMvc.perform(get("/api/lifecycle/plans/" + reportPlan.getId() + "/metrics")
+                .header(
+                    HttpHeaders.AUTHORIZATION,
+                    TestSecurityConfig.bearerFor(TestSecurityConfig.MANAGER_SUBJECT)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.planId").value(reportPlan.getId().toString()))
+            .andExpect(jsonPath("$.plannedCount").value(1));
+    }
 }

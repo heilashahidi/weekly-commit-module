@@ -4,6 +4,7 @@ import com.weeklycommit.config.PrincipalResolver;
 import com.weeklycommit.manager.ReportingRepository;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,7 +76,16 @@ public class ManagerReviewService {
                     });
         review.setReviewer(principal);
         review.setComment(comment);
-        return ManagerReviewDto.from(reviewRepository.save(review));
+        try {
+            // saveAndFlush so a one-per-plan unique-constraint race surfaces here, not at commit.
+            return ManagerReviewDto.from(reviewRepository.saveAndFlush(review));
+        } catch (DataIntegrityViolationException e) {
+            // Two concurrent first-time reviews raced the uq_manager_review_weekly_plan_id
+            // constraint; the loser gets a clean 409 (a retry resolves to an update) rather
+            // than an opaque 500.
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT, "Review was concurrently created; retry", e);
+        }
     }
 
     /**

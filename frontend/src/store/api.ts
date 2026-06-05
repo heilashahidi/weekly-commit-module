@@ -234,7 +234,7 @@ export const api = createApi({
       query: (arg) => {
         const page = arg?.page ?? 0;
         const size = arg?.size ?? 50;
-        return `/api/manager/team?page=${page}&size=${size}&sort=displayName,asc`;
+        return `/api/manager/team?page=${page}&size=${size}&sort=reportDisplayName,asc`;
       },
       providesTags: ['TeamWeek'],
     }),

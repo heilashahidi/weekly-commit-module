@@ -6,6 +6,7 @@ import {
   type PlanMetricsDto,
 } from '../../store/api';
 import { problemDetailMessage } from '../../lib/problemDetail';
+import { formatAccuracy } from '../../lib/metricsFormat';
 import CommitmentRow from '../../components/CommitmentRow';
 import StatusBadge from '../../components/StatusBadge';
 import ManagerReviewNote from '../../components/ManagerReviewNote';
@@ -15,10 +16,6 @@ interface ReportPlanDetailProps {
   planId: string;
   displayName: string;
   onBack: () => void;
-}
-
-function formatAccuracy(accuracy: number | null): string {
-  return accuracy === null ? 'N/A (not applicable)' : `${Math.round(accuracy * 100)}%`;
 }
 
 /** Planned-vs-actual block, shown only once the plan is RECONCILED. */
